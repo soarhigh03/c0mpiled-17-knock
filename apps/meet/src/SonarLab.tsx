@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { probeSonar, type CarrierReading, type DopplerSample, type MouthSample } from '@knock/sdk'
+import {
+  probeSonar,
+  sweepCarrierResponse,
+  type CarrierReading,
+  type DopplerSample,
+  type MouthSample,
+  type SweepPoint,
+} from '@knock/sdk'
 
 /**
  * Hardware bring-up view: watch the Doppler energy and the mouth aperture
@@ -34,6 +41,8 @@ export function SonarLab({ stream }: { stream: MediaStream | null }) {
   const [carrier, setCarrier] = useState<CarrierReading | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [stats, setStats] = useState({ dopplerHz: 0, mouthHz: 0, r: 0, lagMs: 0 })
+  const [sweep, setSweep] = useState<SweepPoint[] | null>(null)
+  const [sweeping, setSweeping] = useState(false)
 
   const doppler = useRef<DopplerSample[]>([])
   const mouth = useRef<MouthSample[]>([])
@@ -104,6 +113,35 @@ export function SonarLab({ stream }: { stream: MediaStream | null }) {
     }
   }
 
+  async function runSweep() {
+    const controller = new AbortController()
+    abortRef.current = controller
+    setSweep([])
+    setError(null)
+    setSweeping(true)
+    try {
+      const points: SweepPoint[] = []
+      await sweepCarrierResponse({
+        signal: controller.signal,
+        onPoint: (p) => {
+          points.push(p)
+          setSweep([...points])
+        },
+      })
+      // Land on whatever this machine actually transmits best.
+      const best = points.reduce<SweepPoint | null>(
+        (a, b) => (a == null || b.arrivalDb > a.arrivalDb ? b : a),
+        null,
+      )
+      if (best) setCarrierHz(Math.round(best.hz))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      abortRef.current = null
+      setSweeping(false)
+    }
+  }
+
   return (
     <details style={{ marginTop: 24, border: '1px solid #334155', borderRadius: 8, padding: 12 }}>
       <summary style={{ cursor: 'pointer' }}>Sonar Lab (하드웨어 점검)</summary>
@@ -130,15 +168,18 @@ export function SonarLab({ stream }: { stream: MediaStream | null }) {
           />{' '}
           Hz
         </label>
-        <button onClick={() => setCarrierHz(randomCarrier())} disabled={running}>
+        <button onClick={() => setCarrierHz(randomCarrier())} disabled={running || sweeping}>
           랜덤
         </button>
-        {running ? (
+        {running || sweeping ? (
           <button onClick={() => abortRef.current?.abort()}>정지</button>
         ) : (
-          <button onClick={start} disabled={!stream}>
-            측정 시작
-          </button>
+          <>
+            <button onClick={start} disabled={!stream}>
+              측정 시작
+            </button>
+            <button onClick={runSweep}>주파수 스윕</button>
+          </>
         )}
         {!stream && <span style={{ opacity: 0.7 }}>카메라를 먼저 켜주세요</span>}
         {/* Small, but visible: a hidden <video> gets throttled and stops
@@ -165,8 +206,51 @@ export function SonarLab({ stream }: { stream: MediaStream | null }) {
         <Readout label="상관 (디버그)" value={`r=${stats.r.toFixed(2)} @ ${stats.lagMs}ms`} />
       </dl>
 
+      {sweep && <SweepTable points={sweep} running={sweeping} />}
+
       {error && <p style={{ color: 'crimson' }}>{error}</p>}
     </details>
+  )
+}
+
+/**
+ * Speaker→mic arrival per frequency. The useful reading is the cliff: where
+ * the bars stop clearing ~6 dB is this machine's ceiling, and a carrier above
+ * it cannot work no matter what the rest of the pipeline does.
+ */
+function SweepTable({ points, running }: { points: SweepPoint[]; running: boolean }) {
+  const best = points.reduce((a, p) => Math.max(a, p.arrivalDb), 0)
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>
+        스피커→마이크 도달 (dB){running && ' — 측정 중…'}
+        {!running && best < 6 && (
+          <span style={{ color: '#fbbf24' }}>
+            {' '}
+            · 전 대역이 0dB 근처입니다. 출력 장치·음량·음소거를 먼저 확인하세요.
+          </span>
+        )}
+      </div>
+      {points.map((p) => (
+        <div key={p.hz} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+          <span style={{ width: 64, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+            {(p.hz / 1000).toFixed(1)} kHz
+          </span>
+          <span
+            style={{
+              height: 10,
+              borderRadius: 2,
+              // Clamped so one strong bar doesn't flatten the rest.
+              width: `${Math.min(100, Math.max(0, p.arrivalDb) * 2)}%`,
+              background: p.arrivalDb >= 6 ? '#34d399' : '#475569',
+            }}
+          />
+          <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.8 }}>
+            {p.arrivalDb.toFixed(1)}
+          </span>
+        </div>
+      ))}
+    </div>
   )
 }
 

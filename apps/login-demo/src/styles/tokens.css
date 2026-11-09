@@ -1,0 +1,42 @@
+/* Knock design tokens (dark UI). All component styles read from these. */
+:root {
+  --window: #202124;
+  --titlebar: #1a1b1e;
+  --panel: #1c1c1e;
+  --panel-border: #2e2f33;
+  --row: #2a2b2e;
+  --control: #3c4043;
+  --accent: #3b6cf6;
+  --accent-text: #a9c0ff;
+  --accent-soft: #8fa9ff;
+
+  --pass: #34c77b;
+  --pass-text: #4ade80;
+  --fail: #f04438;
+  --fail-text: #ff6b5e;
+  --review: #f5a524;
+  --review-text: #ffc24b;
+
+  --text: #e8eaed;
+  --text-muted: #9aa0a6;
+
+  --stage: #111214;
+  --sunken: #17181b;
+  --avatar-1: #5b6bd8;
+  --avatar-2: #0f9d76;
+  --avatar-3: #b4542d;
+  --avatar-4: #7b4bb7;
+
+  --font: -apple-system, 'SF Pro Text', Inter, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --overlay: rgba(20, 21, 24, 0.72);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --titlebar-height: 44px;
+  --panel-width: 380px;
+  --controlbar-height: 68px;
+
+  color-scheme: dark;
+}

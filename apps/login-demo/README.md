@@ -11,5 +11,14 @@
 `npm run dev:desktop` (루트) → server(:8787) + login-demo(:5174), login-demo가 Electron 창으로 뜹니다.
 
 - preload가 `window.knockNative.listVideoDevices()` 하나만 노출 (메인 프로세스에서 `system_profiler SPCameraDataType -json` 결과 반환)
-- 지금 화면은 카메라 목록 + 원본 정보를 그대로 보여주는 임시 페이지 (판정 로직 없음)
+- 카메라 원본 정보 디버그 페이지: `?debug=devices`
 - Electron 바이너리가 없으면: `node node_modules/electron/install.js` (루트)
+
+## 면접관 통화 화면 (mock)
+
+- `?role=interviewer` (기본) — 2x2 비디오 그리드 + 컨트롤 바의 **Knock** 버튼으로 여닫는 380px 패널
+- `?role=candidate` — 자리표시자 (예정)
+- 참가자마다 `KnockClient` 하나 (`src/knock/types.ts`). 지금은 `src/knock/mockClient.ts`, 나중에 `@knock/sdk` 기반 구현으로 교체 — UI는 인터페이스만 사용
+- 판정: fail 하나라도 있으면 Not verified, 그다음 unable, 전부 pass면 Verified (30초 후 자동으로 "result expired")
+- 통화 전송 계층이 없어서 You와 Amara(후보자) 타일 모두 로컬 카메라를 씀 (`TODO(webrtc)`)
+- 개발 모드 전용: `⌘⇧D` 시나리오 스위처 (프로덕션 빌드에는 포함되지 않음)

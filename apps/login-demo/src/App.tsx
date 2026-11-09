@@ -1,42 +1,33 @@
-import { useEffect, useState } from 'react'
-import type { SPCameraDataTypeResult } from './knock-native'
-import './App.css'
+import { Suspense, lazy } from 'react'
+import { CandidatePlaceholder } from './candidate/CandidatePlaceholder.tsx'
+import { NativeDevices } from './debug/NativeDevices.tsx'
+import { InterviewerView } from './interviewer/InterviewerView.tsx'
+import { CANDIDATE_ID, PARTICIPANTS } from './interviewer/participants.ts'
+import { MockKnockClient } from './knock/mockClient.ts'
+import { KnockContext, type KnockClients } from './knock/useKnock.ts'
 
-// Temporary page: dumps raw native camera info. No verdict logic yet.
-function App() {
-  const [result, setResult] = useState<SPCameraDataTypeResult | null>(null)
-  const [error, setError] = useState<string | null>(null)
+// Dev only: the import is dead code in production builds, so the switcher is not bundled.
+const ScenarioSwitcher = import.meta.env.DEV ? lazy(() => import('./dev/ScenarioSwitcher.tsx')) : null
 
-  const native = window.knockNative
+// TODO(sdk): replace with clients backed by @knock/sdk. UI code only sees the KnockClient interface.
+const mocks: Record<string, MockKnockClient> = Object.fromEntries(
+  PARTICIPANTS.map((p) => [p.id, new MockKnockClient()]),
+)
+const clients: KnockClients = mocks
 
-  useEffect(() => {
-    native
-      ?.listVideoDevices()
-      .then(setResult)
-      .catch((err: unknown) => setError(String(err)))
-  }, [native])
+const params = new URLSearchParams(window.location.search)
 
-  const devices = result?.SPCameraDataType ?? []
-
+export function App() {
+  if (params.get('debug') === 'devices') return <NativeDevices />
+  if (params.get('role') === 'candidate') return <CandidatePlaceholder />
   return (
-    <main>
-      <h1>Video devices</h1>
-      {!native && (
-        <pre className="error">window.knockNative is not available (not running in Electron).</pre>
+    <KnockContext value={clients}>
+      <InterviewerView />
+      {ScenarioSwitcher && (
+        <Suspense fallback={null}>
+          <ScenarioSwitcher mocks={mocks} participants={PARTICIPANTS} defaultTarget={CANDIDATE_ID} />
+        </Suspense>
       )}
-      {error && <pre className="error">{error}</pre>}
-      {native && !result && !error && <p>Loading…</p>}
-      {result && devices.length === 0 && <p>No cameras found.</p>}
-      <ul>
-        {devices.map((device, i) => (
-          <li key={i}>
-            <h2>{device._name}</h2>
-            <pre>{JSON.stringify(device, null, 2)}</pre>
-          </li>
-        ))}
-      </ul>
-    </main>
+    </KnockContext>
   )
 }
-
-export default App

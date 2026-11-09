@@ -12,6 +12,8 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
+    "@knock/shared": "*",
+    "lucide-react": "~1.61.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },

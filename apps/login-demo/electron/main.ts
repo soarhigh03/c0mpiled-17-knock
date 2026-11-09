@@ -18,8 +18,16 @@ ipcMain.handle('knock-native:list-video-devices', async () => {
 
 function createWindow() {
   const win = new BrowserWindow({
-    width: 1000,
-    height: 720,
+    width: 1440,
+    height: 900,
+    minWidth: 1200,
+    minHeight: 760,
+    title: 'Knock',
+    backgroundColor: '#202124',
+    // The renderer draws its own title bar (src/interviewer/TitleBar.tsx).
+    ...(process.platform === 'darwin'
+      ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 16, y: 15 } }
+      : {}),
     webPreferences: {
       preload: PRELOAD,
       contextIsolation: true,

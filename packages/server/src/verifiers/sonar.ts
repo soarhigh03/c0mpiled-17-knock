@@ -56,10 +56,6 @@ export function verifySonar(challenge: SonarChallenge, ev: SonarEvidence): Check
     reasons: [...reasons, ...measured],
   })
 
-  // Hardware first: without the carrier there is no measurement to judge.
-  if (!(ev.carrierSnrDb >= MIN_CARRIER_SNR_DB)) {
-    return verdict('inconclusive', 0.5, ["probe did not survive this device's speaker/mic path"])
-  }
   // A client that can't run the landmarker is not a spoof; say so and move on.
   if (ev.mouthAperture.length < MIN_MOUTH_FRAMES) {
     return verdict('inconclusive', 0.5, ['no mouth landmarks in evidence'])
@@ -105,24 +101,35 @@ export function verifySonar(challenge: SonarChallenge, ev: SonarEvidence): Check
 
   const variation = variationCoefficient(echo)
   measured.push(`echo variation ${fmt(variation, 3)}`)
-  if (!(variation >= MIN_DOPPLER_VARIATION)) {
-    return verdict('fail', 0.1, ['echo is static while the video shows a moving mouth'])
-  }
 
   const a = standardise(mouthSpeed)
   const b = standardise(echo)
-  if (!a || !b) {
-    return verdict('fail', 0.1, ['one of the series is flat'])
+  const maxLag = Math.round((MAX_LAG_MS * GRID_HZ) / 1000)
+  const peak = a && b ? peakCrossCorrelation(a, b, maxLag) : null
+  if (peak) {
+    const lagMs = Math.round((peak.lagSamples * 1000) / GRID_HZ)
+    measured.unshift(`doppler↔mouth r=${fmt(peak.r)} at lag ${lagMs >= 0 ? '+' : ''}${lagMs}ms`)
   }
 
-  const maxLag = Math.round((MAX_LAG_MS * GRID_HZ) / 1000)
-  const { r, lagSamples } = peakCrossCorrelation(a, b, maxLag)
-  const lagMs = Math.round((lagSamples * 1000) / GRID_HZ)
-  measured.unshift(`doppler↔mouth r=${fmt(r)} at lag ${lagMs >= 0 ? '+' : ''}${lagMs}ms`)
+  // A match this strong is self-proving: the echo tracked the lips, so the
+  // probe reached the user whatever the SNR estimate claims. Gating on SNR
+  // first would throw away a measurement that demonstrably worked.
+  if (peak && peak.r >= PASS_CORRELATION) {
+    return verdict('pass', scoreFor(peak.r), [])
+  }
 
-  return r >= PASS_CORRELATION
-    ? verdict('pass', scoreFor(r), [])
-    : verdict('fail', scoreFor(r), ['movement does not match the lips'])
+  // Past here the check did not match, and the question is whose fault that
+  // is. Blaming the user requires confidence the probe actually reached them.
+  if (!(ev.carrierSnrDb >= MIN_CARRIER_SNR_DB)) {
+    return verdict('inconclusive', 0.5, ["probe did not survive this device's speaker/mic path"])
+  }
+  if (!peak) {
+    return verdict('fail', 0.1, ['one of the series is flat'])
+  }
+  if (!(variation >= MIN_DOPPLER_VARIATION)) {
+    return verdict('fail', 0.1, ['echo is static while the video shows a moving mouth'])
+  }
+  return verdict('fail', scoreFor(peak.r), ['movement does not match the lips'])
 }
 
 /** Effective sample rate of a series, Hz. */

@@ -11,6 +11,7 @@
     "dev": "npm run dev -w @knock/server & npm run dev -w @knock/meet",
     "dev:server": "npm run dev -w @knock/server",
     "dev:meet": "npm run dev -w @knock/meet",
+    "dev:desktop": "npm run dev -w @knock/server & npm run dev -w @knock/login-demo",
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present"

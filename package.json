@@ -12,6 +12,8 @@
     "dev:server": "npm run dev -w @knock/server",
     "dev:meet": "npm run dev -w @knock/meet",
     "dev:desktop": "npm run dev -w @knock/server & npm run dev -w @knock/login-demo",
+    "dev:interviewer": "npm run dev:desktop",
+    "dev:candidate": "KNOCK_ROLE=candidate npm run dev:desktop",
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",

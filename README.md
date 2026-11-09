@@ -215,13 +215,24 @@ npm test
 
 ```bash
 VITE_ROOM_TRANSPORT=peer
-KNOCK_TOKEN_SECRET=<양쪽 동일>   # 토큰 introspect가 머신 너머로 성립하려면
+KNOCK_TOKEN_SECRET=<양쪽 동일>   # 토큰은 HS256 대칭키 — 같아야 introspect가 성립합니다
+VITE_ROOM_NAMESPACE=<양쪽 동일>  # 공개 브로커에서 룸 id가 겹치지 않게
+KNOCK_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5174  # 5174 = login-demo
 ```
 
-한쪽은 `npm run dev:desktop`(면접관), 다른 쪽은 같은 명령에 `KNOCK_ROLE=candidate`로 띄우고
-같은 룸 코드로 들어갑니다. 공개 브로커라 룸 id가 전역에서 겹칠 수 있고(그때는
-`VITE_ROOM_NAMESPACE`를 바꾸세요) TURN이 없어 빡빡한 NAT에서는 미디어가 안 붙을 수 있습니다 —
-데모용 구성입니다.
+역할은 `.env`가 아니라 실행 명령이 정합니다 — Electron 메인 프로세스는 셸 환경변수를 읽고,
+vite의 `.env`는 `VITE_*`만 렌더러에 넘기기 때문입니다.
+
+```bash
+npm run dev:interviewer   # 면접관
+npm run dev:candidate     # 후보자 (KNOCK_ROLE=candidate)
+```
+
+같은 룸 코드로 들어가면 붙습니다. 후보자 창은 화면 녹화 보호가 켜져 있어 데모 영상에 검게
+찍히므로, 녹화할 땐 `KNOCK_CONTENT_PROTECTION=0 npm run dev:candidate`로 띄우세요.
+
+공개 브로커는 데모용입니다 — TURN이 없어 빡빡한 NAT에서는 시그널링은 붙어도 미디어가 안 붙을
+수 있습니다.
 
 > Chrome 권장. Safari는 `requestVideoFrameCallback`이 없어 sonar가 `inconclusive`가 됩니다.
 > sonar는 **스피커로 소리가 나야** 합니다 — 이어폰을 꽂으면 스피커→방→마이크 경로가 사라집니다.

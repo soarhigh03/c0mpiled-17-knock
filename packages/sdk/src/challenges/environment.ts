@@ -8,6 +8,16 @@ const onVisibility = () => {
   if (document.visibilityState === 'hidden') focusLostCount++
 }
 
+/**
+ * Start the count over. Called when a verification run begins so the evidence
+ * covers that run: the watch is installed at page load and a long session
+ * accumulates every alt-tab since, which says nothing about the moment we are
+ * actually judging.
+ */
+export function resetFocusLoss(): void {
+  focusLostCount = 0
+}
+
 export function startEnvironmentWatch(): () => void {
   if (!watching) {
     window.addEventListener('blur', onBlur)

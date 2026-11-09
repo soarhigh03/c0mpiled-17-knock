@@ -1,6 +1,6 @@
 import type { Challenge, ChallengeKind, CheckResult, Evidence, VerifyResponse } from '@knock/shared'
 import { KnockApi } from './api.ts'
-import { collectEnvironment, startEnvironmentWatch } from './challenges/environment.ts'
+import { collectEnvironment, resetFocusLoss, startEnvironmentWatch } from './challenges/environment.ts'
 import { runLight } from './challenges/light.ts'
 import { runSonar } from './challenges/sonar.ts'
 import { runVoice } from './challenges/voice.ts'
@@ -52,6 +52,8 @@ export function createKnock(options: KnockOptions): KnockClient {
     watchEnvironment: startEnvironmentWatch,
 
     async verify(checks, ctx) {
+      // Judge this run, not everything that happened since the page loaded.
+      resetFocusLoss()
       const session = await api.createSession(checks)
       for (const challenge of session.challenges) {
         const evidence = await runChallenge(challenge, ctx)

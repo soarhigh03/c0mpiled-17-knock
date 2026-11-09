@@ -10,6 +10,11 @@ export {
   type SonarSignals,
 } from './challenges/sonar.ts'
 export type { FaceModelOptions, MouthSample } from './challenges/mouth.ts'
+export {
+  sweepCarrierResponse,
+  type SweepOptions,
+  type SweepPoint,
+} from './challenges/sweep.ts'
 
 export type {
   ChallengeKind,

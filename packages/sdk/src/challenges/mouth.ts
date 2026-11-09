@@ -73,7 +73,7 @@ export async function createMouthTracker(
     track(t0, onSample) {
       running = true
 
-      const sample = (now: number, mediaTimeSec?: number) => {
+      const sample = (at: number, now: number, mediaTimeSec?: number) => {
         // A late callback can outlive stop(); the landmarker is closed by then.
         if (!running) return
         if (video.videoWidth > 0 && video.videoHeight > 0) {
@@ -82,7 +82,7 @@ export async function createMouthTracker(
           lastTimestamp = ts
           const face = landmarker.detectForVideo(video, ts).faceLandmarks[0]
           const value = face && aperture(face, video.videoWidth / video.videoHeight)
-          if (value != null) onSample({ t: now - t0, value })
+          if (value != null) onSample({ t: at - t0, value })
         }
         schedule()
       }
@@ -90,9 +90,15 @@ export async function createMouthTracker(
       const schedule = () => {
         if (!running) return
         if (useFrameCallback) {
-          video.requestVideoFrameCallback((now, metadata) => sample(now, metadata.mediaTime))
+          video.requestVideoFrameCallback((now, metadata) =>
+            // `now` is when the callback ran, which is a camera pipeline later
+            // than the moment the frame depicts — easily 100–200 ms. Timing the
+            // series by it makes every mouth movement look late, so the audio
+            // appears to lead the lips. `captureTime` is the real instant.
+            sample(metadata.captureTime ?? now, now, metadata.mediaTime),
+          )
         } else {
-          requestAnimationFrame((now) => sample(now))
+          requestAnimationFrame((now) => sample(now, now))
         }
       }
 

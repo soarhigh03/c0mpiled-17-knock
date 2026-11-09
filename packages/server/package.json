@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "node --watch --env-file-if-exists=../../.env --import tsx src/index.ts",
     "start": "node --env-file-if-exists=../../.env --import tsx src/index.ts",
-    "typecheck": "tsc --noEmit -p ."
+    "typecheck": "tsc --noEmit -p .",
+    "test": "node --import tsx --test src/verifiers/*.test.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.0",

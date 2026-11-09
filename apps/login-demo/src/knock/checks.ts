@@ -13,14 +13,14 @@ export const CHECK_LABEL: Record<ChallengeKind, string> = {
 /** What each check looks at; shown before it has a result. */
 export const CHECK_HINT: Record<ChallengeKind, string> = {
   environment: 'Virtual devices, focus and displays',
-  light: 'Screen flashes reflected on the face',
+  light: 'Window-border light panels reflected on the face',
   sonar: 'Ultrasonic echo follows mouth motion',
   voice: 'Read-aloud phrase, no synthetic speech',
 }
 
 export const CHECK_RUNNING: Record<ChallengeKind, string> = {
   environment: 'Scanning devices and focus…',
-  light: 'Flashing challenge colors…',
+  light: 'Flashing the window border…',
   sonar: 'Listening for ~15 s while they talk…',
   voice: 'Listening to read-aloud phrase…',
 }

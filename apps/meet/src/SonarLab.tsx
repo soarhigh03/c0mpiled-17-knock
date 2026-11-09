@@ -1,15 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
-import { probeSonar, type DopplerSample, type MouthSample } from '@knock/sdk'
+import { probeSonar, type CarrierReading, type DopplerSample, type MouthSample } from '@knock/sdk'
 
 /**
  * Hardware bring-up view: watch the Doppler energy and the mouth aperture
  * live, on this machine, at a carrier of your choosing.
  *
- * Laptop speakers and microphones differ wildly above 18 kHz, so before
- * trusting a sonar verdict you want to see, per machine: a carrier SNR well
- * above ~6 dB, and Doppler energy that visibly tracks the mouth trace while
- * you talk. The correlation readout here is a debug instrument only — the real
- * verdict is computed server-side from submitted evidence.
+ * Laptop speakers and microphones differ wildly above 18 kHz, so per machine
+ * you want to see the tone actually arrive (캐리어 도달 ≫ 0 dB, 톤 순도 high)
+ * and Doppler energy that tracks the mouth trace.
+ *
+ * A high correlation on its own does not prove the sonar works: speech
+ * sibilance reaches past 19 kHz and lands straight in the demodulation band,
+ * where it correlates with the lips just as well as a real echo would. The
+ * control is to mouth the words silently — a correlation that survives that
+ * is Doppler; one that collapses was the voice all along.
+ *
+ * Every number here is a debug instrument. The verdict is server-side.
  */
 
 /** Rolling window drawn and correlated over. */
@@ -25,7 +31,7 @@ const MOUTH_COLOR = '#f472b6'
 export function SonarLab({ stream }: { stream: MediaStream | null }) {
   const [carrierHz, setCarrierHz] = useState(randomCarrier)
   const [running, setRunning] = useState(false)
-  const [snrDb, setSnrDb] = useState<number | null>(null)
+  const [carrier, setCarrier] = useState<CarrierReading | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [stats, setStats] = useState({ dopplerHz: 0, mouthHz: 0, r: 0, lagMs: 0 })
 
@@ -77,7 +83,7 @@ export function SonarLab({ stream }: { stream: MediaStream | null }) {
     abortRef.current = controller
     doppler.current = []
     mouth.current = []
-    setSnrDb(null)
+    setCarrier(null)
     setError(null)
     setRunning(true)
     try {
@@ -86,7 +92,7 @@ export function SonarLab({ stream }: { stream: MediaStream | null }) {
         carrierHz,
         durationMs: MAX_RUN_MS,
         signal: controller.signal,
-        onCarrierSnrDb: setSnrDb,
+        onCarrier: setCarrier,
         onDoppler: (s) => push(doppler.current, s),
         onMouth: (s) => push(mouth.current, s),
       })
@@ -103,7 +109,10 @@ export function SonarLab({ stream }: { stream: MediaStream | null }) {
       <summary style={{ cursor: 'pointer' }}>Sonar Lab (하드웨어 점검)</summary>
 
       <p style={{ fontSize: 13, opacity: 0.75 }}>
-        말하는 동안 도플러 에너지가 입 벌림을 따라가는지, 캐리어 SNR이 6dB 이상인지 노트북마다 확인하세요.
+        노트북마다 확인: <b>캐리어 도달</b>이 0dB보다 확실히 높아야 우리 톤이 실제로 스피커→마이크를
+        통과한 것이고, <b>톤 순도</b>가 높아야 그게 순음입니다. 둘 다 0에 가까운데 상관(r)만 높다면
+        도플러가 아니라 목소리의 고주파 성분을 재고 있는 것이니, <b>소리 없이 입만 움직여</b> 보세요.
+        그때도 r이 유지되어야 진짜 도플러입니다.
       </p>
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '8px 0' }}>
@@ -149,7 +158,8 @@ export function SonarLab({ stream }: { stream: MediaStream | null }) {
       />
 
       <dl style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
-        <Readout label="캐리어 SNR" value={snrDb == null ? '—' : `${snrDb.toFixed(1)} dB`} />
+        <Readout label="캐리어 도달" value={fmtDb(carrier?.snrDb)} />
+        <Readout label="톤 순도" value={fmtDb(carrier?.tonalityDb)} />
         <Readout label="도플러" value={`${stats.dopplerHz.toFixed(0)} Hz`} color={DOPPLER_COLOR} />
         <Readout label="입 벌림" value={`${stats.mouthHz.toFixed(0)} fps`} color={MOUTH_COLOR} />
         <Readout label="상관 (디버그)" value={`r=${stats.r.toFixed(2)} @ ${stats.lagMs}ms`} />
@@ -171,6 +181,10 @@ function Readout({ label, value, color }: { label: string; value: string; color?
 
 function randomCarrier(): number {
   return 18_000 + Math.round(Math.random() * 20) * 100
+}
+
+function fmtDb(db: number | undefined): string {
+  return db == null ? '—' : `${db.toFixed(1)} dB`
 }
 
 /** Keep only the trailing window; `t` arrives monotonically. */

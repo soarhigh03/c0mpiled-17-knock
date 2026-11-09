@@ -4,6 +4,7 @@ export { createKnock, type KnockClient, type KnockOptions, type RunContext } fro
 export {
   probeSonar,
   SONAR_PROMPT,
+  type CarrierReading,
   type DopplerSample,
   type SonarProbeOptions,
   type SonarSignals,

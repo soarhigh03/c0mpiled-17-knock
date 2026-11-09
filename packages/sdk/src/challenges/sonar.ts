@@ -40,9 +40,15 @@ const SNR_INTERVAL_MS = 500
 const FFT_SIZE = 8192
 /** Half-width of the carrier peak search, in bins. */
 const PEAK_BINS = 4
-/** Noise floor band, offset from the carrier. Doppler sidebands stay inside it. */
-const FLOOR_FROM_HZ = 500
-const FLOOR_TO_HZ = 1_500
+/**
+ * Guard band offset. Far enough out that mouth Doppler (tens of Hz) is not in
+ * it, close enough that the device's frequency response is much the same.
+ */
+const GUARD_OFFSET_HZ = 400
+/** The analyser needs a full FFT of audio before its first read means anything. */
+const BASELINE_FILL_MS = 250
+const BASELINE_READS = 3
+const BASELINE_GAP_MS = 60
 /** Reported when the spectrum never showed anything measurable (e.g. dead mic). */
 const NO_CARRIER_DB = -120
 
@@ -69,7 +75,24 @@ export interface SonarProbeOptions {
   onReady?: () => void
   onDoppler?: (sample: DopplerSample) => void
   onMouth?: (sample: MouthSample) => void
-  onCarrierSnrDb?: (db: number) => void
+  onCarrier?: (reading: CarrierReading) => void
+}
+
+export interface CarrierReading {
+  /**
+   * How far the carrier bin rose when the tone was switched on, dB. Measured
+   * against the same bin in the silent room, so unlike a peak-vs-neighbours
+   * estimate it carries no order-statistics bias: 0 dB really is "our tone
+   * added nothing".
+   */
+  snrDb: number
+  /**
+   * Carrier bin over a guard band beside it, dB. A real tone towers over the
+   * guard; broadband energy that merely lands in the demodulation band —
+   * speech sibilance reaches past 19 kHz — lifts both together and scores
+   * near 0. Diagnostic only; nothing judges on it yet.
+   */
+  tonalityDb: number
 }
 
 export interface SonarSignals {
@@ -126,6 +149,29 @@ export async function probeSonar(options: SonarProbeOptions): Promise<SonarSigna
     // Loading the face model takes seconds; do it before the tone goes out.
     tracker = await createMouthTracker(options.video, options.faceModel)
 
+    const analyser = new AnalyserNode(ac, { fftSize: FFT_SIZE, smoothingTimeConstant: 0 })
+    const micSource = ac.createMediaStreamSource(mic)
+    micSource.connect(analyser)
+
+    // What the carrier bin reads in this room with our tone off. Everything
+    // the SNR says later is relative to this, which is the only way the number
+    // means "our tone arrived" rather than "this bin happens to be the loudest
+    // of the nine I looked at".
+    const spectrum = new Float32Array(analyser.frequencyBinCount)
+    const binHz = ac.sampleRate / FFT_SIZE
+    const levelAt = (hz: number) => {
+      analyser.getFloatFrequencyData(spectrum)
+      return bandPeakDb(spectrum, binHz, hz)
+    }
+    await wait(BASELINE_FILL_MS, options.signal)
+    const ambient: number[] = []
+    for (let i = 0; i < BASELINE_READS; i++) {
+      const db = levelAt(options.carrierHz)
+      if (db != null) ambient.push(db)
+      await wait(BASELINE_GAP_MS, options.signal)
+    }
+    const ambientDb = ambient.length > 0 ? median(ambient) : NO_CARRIER_DB
+
     // --- transmit: one continuous tone, faded in and out.
     // TODO(meet): notch this out of the outgoing WebRTC audio so the far end
     // doesn't carry our probe into their own sonar window.
@@ -148,10 +194,7 @@ export async function probeSonar(options: SonarProbeOptions): Promise<SonarSigna
         dcAlpha: Math.exp((-2 * Math.PI * DC_CORNER_HZ) / basebandHz),
       },
     })
-    const analyser = new AnalyserNode(ac, { fftSize: FFT_SIZE, smoothingTimeConstant: 0 })
-    const micSource = ac.createMediaStreamSource(mic)
     micSource.connect(demod)
-    micSource.connect(analyser)
     // The worklet emits silence, but a node the destination can't reach is
     // allowed to be culled from the rendering graph, so give it a muted sink.
     demod.connect(new GainNode(ac, { gain: 0 })).connect(ac.destination)
@@ -192,16 +235,19 @@ export async function probeSonar(options: SonarProbeOptions): Promise<SonarSigna
     options.onReady?.()
     await wait(LEAD_IN_MS, options.signal)
 
-    const spectrum = new Float32Array(analyser.frequencyBinCount)
-    const readSnr = () => {
-      analyser.getFloatFrequencyData(spectrum)
-      const db = carrierSnrDb(spectrum, ac.sampleRate / FFT_SIZE, options.carrierHz)
-      if (db == null) return
-      snrReadings.push(db)
-      options.onCarrierSnrDb?.(db)
+    const readCarrier = () => {
+      const carrier = levelAt(options.carrierHz)
+      if (carrier == null) return
+      const guard = levelAt(options.carrierHz + GUARD_OFFSET_HZ)
+      const reading: CarrierReading = {
+        snrDb: carrier - ambientDb,
+        tonalityDb: guard == null ? 0 : carrier - guard,
+      }
+      snrReadings.push(reading.snrDb)
+      options.onCarrier?.(reading)
     }
-    snrTimer = setInterval(readSnr, SNR_INTERVAL_MS)
-    readSnr()
+    snrTimer = setInterval(readCarrier, SNR_INTERVAL_MS)
+    readCarrier()
 
     await wait(options.durationMs, options.signal)
 
@@ -249,21 +295,15 @@ export async function runSonar(challenge: SonarChallenge, ctx: RunContext): Prom
 }
 
 /**
- * Carrier peak over the noise floor a little further out, dB, or null when the
- * spectrum has nothing usable in it. A quiet result means the speaker or the
- * microphone rolls off before the carrier, not that the user is a replay.
+ * Strongest bin within ±PEAK_BINS of `hz`, dBFS, or null when the spectrum has
+ * nothing usable there. The search width covers an off-centre tone leaking
+ * into its neighbours; the caller is responsible for comparing two of these
+ * rather than reading one in isolation.
  */
-function carrierSnrDb(spectrum: Float32Array, binHz: number, carrierHz: number): number | null {
-  const carrierBin = Math.round(carrierHz / binHz)
-  const peak = Math.max(...finiteBins(spectrum, carrierBin - PEAK_BINS, carrierBin + PEAK_BINS))
-  const from = Math.round(FLOOR_FROM_HZ / binHz)
-  const to = Math.round(FLOOR_TO_HZ / binHz)
-  const floor = median([
-    ...finiteBins(spectrum, carrierBin - to, carrierBin - from),
-    ...finiteBins(spectrum, carrierBin + from, carrierBin + to),
-  ])
-  if (!Number.isFinite(peak) || !Number.isFinite(floor)) return null
-  return peak - floor
+function bandPeakDb(spectrum: Float32Array, binHz: number, hz: number): number | null {
+  const centre = Math.round(hz / binHz)
+  const bins = finiteBins(spectrum, centre - PEAK_BINS, centre + PEAK_BINS)
+  return bins.length > 0 ? Math.max(...bins) : null
 }
 
 /** Silent bins read as -Infinity, which would poison a peak or a median. */

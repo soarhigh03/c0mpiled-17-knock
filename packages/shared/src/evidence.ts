@@ -25,13 +25,34 @@ export const LightEvidence = z.object({
 })
 export type LightEvidence = z.infer<typeof LightEvidence>
 
+/**
+ * Both series carry `t` in ms from the start of the probe window, on one clock:
+ * audio frame indices are mapped onto `performance.now()` via
+ * `AudioContext.getOutputTimestamp()`, video frames are timed by
+ * `requestVideoFrameCallback`. The verifier relies on that shared timebase.
+ */
 export const SonarEvidence = z.object({
   kind: z.literal('sonar'),
-  /** Doppler energy around the carrier per time slot. */
-  doppler: z.array(z.object({ t: z.number(), energy: z.number() })),
-  /** Mouth aperture from face landmarks (e.g. MediaPipe) over the same window. */
-  mouthAperture: z.array(z.object({ t: z.number(), value: z.number() })),
+  // Caps are generous for the issued windows (100 Hz and ~60 fps) but keep a
+  // hostile client from handing the verifier an unbounded series.
+  /** Movement energy: RMS of the DC-removed quadrature baseband per frame. */
+  doppler: z.array(z.object({ t: z.number(), energy: z.number().nonnegative() })).max(6_000),
+  /** Mouth aperture from face landmarks (e.g. MediaPipe), over face height. */
+  mouthAperture: z.array(z.object({ t: z.number(), value: z.number() })).max(3_000),
+  /**
+   * Whole-head pose from the same frames. A single tone and a single mic give
+   * one mixed number per frame, so the echo cannot be separated by position —
+   * but video can, and a moving head is a far larger reflector than lips. The
+   * verifier regresses this out before asking whether the lips explain what is
+   * left.
+   */
+  head: z
+    .array(z.object({ t: z.number(), scale: z.number(), x: z.number(), y: z.number() }))
+    .max(3_000)
+    .default([]),
   sampleRate: z.number().positive(),
+  /** Carrier peak over the nearby noise floor, dB. Low ⇒ the probe never arrived. */
+  carrierSnrDb: z.number(),
 })
 export type SonarEvidence = z.infer<typeof SonarEvidence>
 

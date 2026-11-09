@@ -19,17 +19,14 @@ export function issueChallenge(kind: ChallengeKind): Challenge {
         sequence: Array.from({ length: 8 }, () => LIGHT_PALETTE[randomInt(LIGHT_PALETTE.length)]!),
         frameMs: 400,
       }
-    case 'sonar': {
-      const slotMs = 250
-      const durationMs = 6_000
-      return {
-        kind,
-        carriersHz: [18_500 + randomInt(0, 2_000)],
-        pattern: Array.from({ length: durationMs / slotMs }, () => (randomInt(2) as 0 | 1)),
-        slotMs,
-        durationMs,
-      }
-    }
+    case 'sonar':
+      // 18–20 kHz: above the speech band, below where laptop speakers die out.
+      // The frequency is the replay defence — see SonarChallenge.
+      // 15s. The check is passive — it observes whatever the candidate is
+      // already saying — so the window has to be long enough to catch real
+      // speech without asking for any. More samples also pull the chance
+      // correlation down, which is what the verdict is measured against.
+      return { kind, carrierHz: 18_000 + randomInt(0, 2_001), durationMs: 15_000 }
     case 'voice':
       return { kind, phrase: PHRASES[randomInt(PHRASES.length)]! }
   }

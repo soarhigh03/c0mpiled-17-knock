@@ -43,7 +43,7 @@ export function SonarLab({ stream }: { stream: MediaStream | null }) {
   const [running, setRunning] = useState(false)
   const [carrier, setCarrier] = useState<CarrierReading | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [stats, setStats] = useState({ dopplerHz: 0, mouthHz: 0, r: 0, lagMs: 0 })
+  const [stats, setStats] = useState({ dopplerHz: 0, mouthHz: 0, r: 0, lagMs: 0, medianR: 0 })
   const [sweep, setSweep] = useState<SweepPoint[] | null>(null)
   const [sweeping, setSweeping] = useState(false)
   const [sweepNote, setSweepNote] = useState<string | null>(null)
@@ -53,6 +53,8 @@ export function SonarLab({ stream }: { stream: MediaStream | null }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+  /** Every r sampled this run, for the median readout. */
+  const history = useRef<number[]>([])
 
   // The lab reads frames from its own element so it can run independently of
   // the interview view; a stream can feed any number of <video>s.
@@ -73,11 +75,15 @@ export function SonarLab({ stream }: { stream: MediaStream | null }) {
 
     const timer = setInterval(() => {
       const { r, lagMs } = correlate(doppler.current, mouth.current)
+      // The live r swings with every rolling window. The median over the run
+      // is the number worth writing down when comparing scenarios.
+      if (Number.isFinite(r)) history.current.push(r)
       setStats({
         dopplerHz: rate(doppler.current),
         mouthHz: rate(mouth.current),
         r,
         lagMs,
+        medianR: medianOf(history.current),
       })
     }, 250)
 
@@ -96,6 +102,7 @@ export function SonarLab({ stream }: { stream: MediaStream | null }) {
     abortRef.current = controller
     doppler.current = []
     mouth.current = []
+    history.current = []
     setCarrier(null)
     setError(null)
     setRunning(true)
@@ -220,6 +227,7 @@ export function SonarLab({ stream }: { stream: MediaStream | null }) {
         <Readout label="도플러" value={`${stats.dopplerHz.toFixed(0)} Hz`} color={DOPPLER_COLOR} />
         <Readout label="입 벌림" value={`${stats.mouthHz.toFixed(0)} fps`} color={MOUTH_COLOR} />
         <Readout label="상관 (디버그)" value={`r=${stats.r.toFixed(2)} @ ${stats.lagMs}ms`} />
+        <Readout label="상관 중앙값" value={stats.medianR.toFixed(2)} />
       </dl>
 
       {sweep && <SweepTable points={sweep} running={sweeping} note={sweepNote} />}
@@ -312,6 +320,12 @@ function Readout({ label, value, color }: { label: string; value: string; color?
 
 function randomCarrier(): number {
   return 18_000 + Math.round(Math.random() * 20) * 100
+}
+
+function medianOf(xs: number[]): number {
+  if (xs.length === 0) return 0
+  const sorted = [...xs].sort((a, b) => a - b)
+  return sorted[sorted.length >> 1]!
 }
 
 function fmtDb(db: number | undefined): string {

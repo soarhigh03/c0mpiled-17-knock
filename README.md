@@ -55,7 +55,8 @@ const { verdict, token } = await knock.verify(['environment', 'light', 'sonar'],
   stream,
   video,
   onResult: (r) => console.log(r),
-  // 사용자가 해야 할 동작 ("1부터 10까지 소리 내어 세어주세요"). 표시는 앱 책임.
+  // 사용자가 해야 할 동작 (예: "…1부터 천천히 소리 내어 세어주세요"). 표시는 앱 책임.
+  // sonar는 측정 창이 열리기 1.2초 전에 프롬프트를 띄우므로 즉시 보여줘야 함.
   onPrompt: (prompt) => setPrompt(prompt),
 })
 // token을 자기 백엔드로 보내 /v1/tokens/introspect로 검증

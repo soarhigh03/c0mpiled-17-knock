@@ -10,8 +10,15 @@ import {
   type SonarFrameMessage,
 } from './sonar-worklet.ts'
 
-/** What the user has to do for the probe to see anything. */
-export const SONAR_PROMPT = '1부터 10까지 소리 내어 세어주세요'
+/**
+ * What the user has to do for the probe to see anything.
+ *
+ * Deliberately open-ended: a fixed "count to 10" finishes before the window
+ * does, and the leftover seconds are silence plus the idle movement of someone
+ * who thinks they are done — motion the lips don't explain, which costs an
+ * honest user correlation. Clearing the prompt is the signal to stop.
+ */
+export const SONAR_PROMPT = '화면이 바뀔 때까지 1부터 천천히 소리 내어 세어주세요'
 const SONAR_PREPARING = '마이크와 얼굴 추적을 준비하고 있습니다…'
 
 /** Carrier amplitude: loud enough to survive the room, still inaudible. */

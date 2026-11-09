@@ -22,6 +22,11 @@ export function issueChallenge(kind: ChallengeKind): Challenge {
     case 'sonar':
       // 18–20 kHz: above the speech band, below where laptop speakers die out.
       // The frequency is the replay defence — see SonarChallenge.
+      // 8s: long enough that chance correlation stays near r≈0.1, well under
+      // the pass threshold. The SDK's prompt is open-ended so the user is
+      // still speaking when the window closes — a window that outlasts the
+      // task ends in silence and idle movement, which is motion the lips
+      // don't explain.
       return { kind, carrierHz: 18_000 + randomInt(0, 2_001), durationMs: 8_000 }
     case 'voice':
       return { kind, phrase: PHRASES[randomInt(PHRASES.length)]! }

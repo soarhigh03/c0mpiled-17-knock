@@ -10,7 +10,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "typecheck": "tsc -b",
-    "test": "node --test 'src/**/*.test.ts'",
+    "test": "node --import tsx --test src/*.test.ts src/*/*.test.ts",
     "build:native": "node scripts/build-native.mjs"
   },
   "dependencies": {

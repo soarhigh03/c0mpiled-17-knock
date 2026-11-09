@@ -57,13 +57,18 @@ export interface LaggedCorrelation {
 }
 
 /**
- * Peak cross-correlation of two standardised series over ±`maxLag` samples.
+ * Peak cross-correlation of two standardised series over a lag range.
  * Only the positive peak is reported: an anti-correlated pair is not evidence
  * that the mouth drove the echo.
  */
-export function peakCrossCorrelation(a: number[], b: number[], maxLag: number): LaggedCorrelation {
+export function peakCrossCorrelation(
+  a: number[],
+  b: number[],
+  minLag: number,
+  maxLag: number,
+): LaggedCorrelation {
   let best: LaggedCorrelation = { r: 0, lagSamples: 0 }
-  for (let lag = -maxLag; lag <= maxLag; lag++) {
+  for (let lag = minLag; lag <= maxLag; lag++) {
     const from = Math.max(0, -lag)
     const to = Math.min(a.length, b.length - lag)
     const n = to - from
@@ -74,4 +79,37 @@ export function peakCrossCorrelation(a: number[], b: number[], maxLag: number): 
     if (r > best.r) best = { r, lagSamples: lag }
   }
   return best
+}
+
+/** Rotations used to estimate the chance level. */
+const ROTATIONS = 8
+
+/**
+ * What the same peak search is worth on data with no real time relationship.
+ *
+ * Rotating one series keeps its shape, its spikiness and its autocorrelation
+ * but destroys its alignment with the other, so any peak the search still
+ * finds is what coincidence alone buys. Searching N lags and keeping the
+ * maximum inflates r on its own — the wider the search and the spikier the
+ * series, the more it inflates — and without this baseline there is no way to
+ * tell a real 0.3 from a coincidental one.
+ */
+export function chanceCorrelation(
+  a: number[],
+  b: number[],
+  minLag: number,
+  maxLag: number,
+): number {
+  const n = b.length
+  // Keep rotations clear of the true alignment, or the "null" still contains
+  // the signal we are trying to measure against.
+  const guard = Math.abs(minLag) + Math.abs(maxLag) + 1
+  const peaks: number[] = []
+  for (let k = 1; k <= ROTATIONS; k++) {
+    const shift = Math.round((k * n) / (ROTATIONS + 1))
+    if (shift < guard || n - shift < guard) continue
+    const rotated = [...b.slice(shift), ...b.slice(0, shift)]
+    peaks.push(peakCrossCorrelation(a, rotated, minLag, maxLag).r)
+  }
+  return peaks.length > 0 ? peaks.reduce((s, x) => s + x, 0) / peaks.length : 0
 }

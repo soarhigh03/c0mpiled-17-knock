@@ -1,0 +1,25 @@
+{
+  "name": "knock",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @knock/server & npm run dev -w @knock/meet",
+    "dev:server": "npm run dev -w @knock/server",
+    "dev:meet": "npm run dev -w @knock/meet",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "typescript": "~7.0.2",
+    "@types/node": "^24.19.2"
+  }
+}

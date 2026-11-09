@@ -1,5 +1,14 @@
 import type { SonarChallenge, SonarEvidence } from '@knock/shared'
 import type { RunContext } from '../client.ts'
+import {
+  bandPeakDb,
+  FFT_SIZE,
+  FILL_MS,
+  median,
+  NO_CARRIER_DB,
+  RAW_MIC,
+  wait,
+} from './audio.ts'
 import { createMouthTracker, type FaceModelOptions, type MouthSample, type MouthTracker } from './mouth.ts'
 import {
   BASEBAND_HZ,
@@ -37,20 +46,13 @@ const WARMUP_MS = 400
 const LEAD_IN_MS = 1_200
 /** Carrier SNR is sampled repeatedly and reduced to a median. */
 const SNR_INTERVAL_MS = 500
-const FFT_SIZE = 8192
-/** Half-width of the carrier peak search, in bins. */
-const PEAK_BINS = 4
 /**
  * Guard band offset. Far enough out that mouth Doppler (tens of Hz) is not in
  * it, close enough that the device's frequency response is much the same.
  */
 const GUARD_OFFSET_HZ = 400
-/** The analyser needs a full FFT of audio before its first read means anything. */
-const BASELINE_FILL_MS = 250
 const BASELINE_READS = 3
 const BASELINE_GAP_MS = 60
-/** Reported when the spectrum never showed anything measurable (e.g. dead mic). */
-const NO_CARRIER_DB = -120
 
 export interface DopplerSample {
   /** ms since the probe window started, on the `performance.now()` clock. */
@@ -66,7 +68,6 @@ export interface SonarProbeOptions {
   /** Ends the probe early and returns whatever was collected. */
   signal?: AbortSignal
   faceModel?: FaceModelOptions
-  /** Fired once the measured window opens — this is when the user must speak. */
   /**
    * Fired once the carrier is up and settled, `LEAD_IN_MS` before the window
    * opens. This — not the window itself — is when the user must be told to
@@ -118,14 +119,7 @@ export async function probeSonar(options: SonarProbeOptions): Promise<SonarSigna
   // Our own capture: the browser's echo canceller and noise suppressor exist
   // precisely to delete what we are trying to measure, and a call's microphone
   // track has them on.
-  const mic = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      echoCancellation: false,
-      noiseSuppression: false,
-      autoGainControl: false,
-      channelCount: 1,
-    },
-  })
+  const mic = await navigator.mediaDevices.getUserMedia({ audio: RAW_MIC })
   // No forced sample rate: resampling the capture would smear the carrier.
   // A device that ends up below ~40 kHz can't carry it at all, which the SNR
   // reading reports rather than silently mis-measuring.
@@ -167,7 +161,7 @@ export async function probeSonar(options: SonarProbeOptions): Promise<SonarSigna
         guard: bandPeakDb(spectrum, binHz, options.carrierHz + GUARD_OFFSET_HZ),
       }
     }
-    await wait(BASELINE_FILL_MS, options.signal)
+    await wait(FILL_MS, options.signal)
     const ambient: number[] = []
     for (let i = 0; i < BASELINE_READS; i++) {
       const { carrier } = snapshot()
@@ -295,47 +289,4 @@ export async function runSonar(challenge: SonarChallenge, ctx: RunContext): Prom
   } finally {
     ctx.onPrompt?.(null)
   }
-}
-
-/**
- * Strongest bin within ±PEAK_BINS of `hz`, dBFS, or null when the spectrum has
- * nothing usable there. The search width covers an off-centre tone leaking
- * into its neighbours; the caller is responsible for comparing two of these
- * rather than reading one in isolation.
- */
-function bandPeakDb(spectrum: Float32Array, binHz: number, hz: number): number | null {
-  const centre = Math.round(hz / binHz)
-  const bins = finiteBins(spectrum, centre - PEAK_BINS, centre + PEAK_BINS)
-  return bins.length > 0 ? Math.max(...bins) : null
-}
-
-/** Silent bins read as -Infinity, which would poison a peak or a median. */
-function finiteBins(spectrum: Float32Array, from: number, to: number): number[] {
-  const out: number[] = []
-  for (let i = Math.max(0, from); i <= Math.min(spectrum.length - 1, to); i++) {
-    const db = spectrum[i]!
-    if (Number.isFinite(db)) out.push(db)
-  }
-  return out
-}
-
-function median(xs: number[]): number {
-  if (xs.length === 0) return Number.NaN
-  const sorted = [...xs].sort((a, b) => a - b)
-  const mid = sorted.length >> 1
-  return sorted.length % 2 === 1 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2
-}
-
-/** Resolves on timeout *or* abort: aborting ends the probe, it isn't an error. */
-function wait(ms: number, signal?: AbortSignal): Promise<void> {
-  if (signal?.aborted) return Promise.resolve()
-  return new Promise((resolve) => {
-    const done = () => {
-      clearTimeout(timer)
-      signal?.removeEventListener('abort', done)
-      resolve()
-    }
-    const timer = setTimeout(done, ms)
-    signal?.addEventListener('abort', done, { once: true })
-  })
 }

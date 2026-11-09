@@ -1,13 +1,14 @@
 import { Shield, ShieldAlert, ShieldCheck, ShieldQuestionMark } from 'lucide-react'
 import { CHECK_LABEL, CHECK_RUNNING } from '../knock/checks.ts'
-import type { CheckProgress, OverallVerdict } from '../knock/types.ts'
+import type { CheckProgress, CheckRow, OverallVerdict } from '../knock/types.ts'
 import { VERDICT_TTL_MS } from '../knock/verdict.ts'
-import { secondsLeft } from './present.ts'
+import { secondsLeft, sentence } from './present.ts'
 import { Sparkline } from './Sparkline.tsx'
 
 interface StatusCardProps {
   verdict: OverallVerdict
   progress: CheckProgress | null
+  checks: CheckRow[]
   now: number
 }
 
@@ -16,7 +17,9 @@ const UNABLE_DETAIL = {
   device_changed: 'A camera, mic or display changed during the call, so the earlier result no longer applies.',
 } as const
 
-export function StatusCard({ verdict, progress, now }: StatusCardProps) {
+export function StatusCard({ verdict, progress, checks, now }: StatusCardProps) {
+  const notRun = checks.filter((c) => c.status === 'not_run').map((c) => CHECK_LABEL[c.kind])
+  const passed = checks.filter((c) => c.status === 'pass').map((c) => CHECK_LABEL[c.kind])
   switch (verdict.status) {
     case 'idle':
       return (
@@ -82,7 +85,12 @@ export function StatusCard({ verdict, progress, now }: StatusCardProps) {
             <h2>Verified</h2>
             <span className="status-card__aside tabular">Valid for {left} s</span>
           </div>
-          <p>A live person responded to every check in this call.</p>
+          {/* Never imply checks that didn't run were passed. */}
+          <p>
+            {notRun.length === 0
+              ? 'A live person responded to every check in this call.'
+              : `Passed: ${passed.join(', ')}. Not run yet: ${notRun.join(', ')}.`}
+          </p>
           <div className="bar" aria-label={`Valid for ${left} seconds`}>
             <div className="bar__fill bar__fill--pass" style={{ width: `${fraction * 100}%` }} />
           </div>
@@ -98,7 +106,8 @@ export function StatusCard({ verdict, progress, now }: StatusCardProps) {
             <h2>Not verified</h2>
           </div>
           <p>
-            <strong>{verdict.failing.map((k) => CHECK_LABEL[k]).join(', ')} failed.</strong> {verdict.reason}.
+            {verdict.failing.length > 0 && <strong>{verdict.failing.map((k) => CHECK_LABEL[k]).join(', ')} failed. </strong>}
+            {sentence(verdict.reason)}.
           </p>
           <div className="recommend">
             <div className="recommend__label">Recommended</div>
@@ -135,7 +144,7 @@ export function StatusCard({ verdict, progress, now }: StatusCardProps) {
             <ShieldQuestionMark size={20} aria-hidden />
             <h2>{verdict.cause === 'expired' ? 'Unable to verify — result expired' : 'Unable to verify'}</h2>
           </div>
-          {verdict.cause !== 'expired' && <p className="status-card__reason">{verdict.reason}</p>}
+          {verdict.cause !== 'expired' && <p className="status-card__reason">{sentence(verdict.reason)}</p>}
           <p>{verdict.cause === 'inconclusive' ? 'Ask the candidate to fix this, then run the check again.' : UNABLE_DETAIL[verdict.cause]}</p>
         </section>
       )

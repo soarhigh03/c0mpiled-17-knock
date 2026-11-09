@@ -1,13 +1,12 @@
 import { PhoneOff } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
-import { useNativeEnvironment } from '../environment/hooks.ts'
-import { useEnvironmentReporting } from '../environment/useEnvironmentReporting.ts'
 import { useKnockClients, useKnockStates } from '../knock/useKnock.ts'
 import { effectiveVerdict } from '../knock/verdict.ts'
 import { ControlBar } from './ControlBar.tsx'
 import { useLocalCamera, useNow } from './hooks.ts'
 import { KnockPanel } from './KnockPanel.tsx'
-import { CANDIDATE_ID, PARTICIPANTS, participantName } from './participants.ts'
+import type { Room } from '../rooms.ts'
+import { GUEST_ID, type Participant } from './participants.ts'
 import { aggregateTone, formatElapsed } from './present.ts'
 import { ReportModal } from './ReportModal.tsx'
 import { TitleBar } from './TitleBar.tsx'
@@ -15,7 +14,13 @@ import { Toasts } from './Toasts.tsx'
 import { useKnockAlerts, type CallAlert } from './useKnockAlerts.ts'
 import { VideoTile } from './VideoTile.tsx'
 
-export function InterviewerView() {
+interface InterviewerViewProps {
+  room: Room
+  participants: Participant[]
+  onLeave: () => void
+}
+
+export function InterviewerView({ room, participants, onLeave }: InterviewerViewProps) {
   const clients = useKnockClients()
   const states = useKnockStates(clients)
   const now = useNow()
@@ -24,24 +29,19 @@ export function InterviewerView() {
   const [cameraOn, setCameraOn] = useState(true)
   const [ended, setEnded] = useState(false)
   const [panelOpen, setPanelOpen] = useState(false)
-  const [selectedId, setSelectedId] = useState(CANDIDATE_ID)
+  const [selectedId, setSelectedId] = useState(GUEST_ID)
   const [reportOpen, setReportOpen] = useState(false)
   const [toasts, setToasts] = useState<CallAlert[]>([])
   const autoOpened = useRef(false)
 
-  // Both "You" and the candidate tile use this until the call transport exists.
+  // Your tile and (until the call transport exists) the guest's tile both use this.
   const { stream } = useLocalCamera()
-
-  // TODO(webrtc): this binding belongs on the candidate's machine. For single-machine demos the
-  // candidate tile shows the local camera, so its device report goes into the candidate's client.
-  const nativeEnv = useNativeEnvironment()
-  useEnvironmentReporting(clients[CANDIDATE_ID], stream, nativeEnv)
 
   // Re-derived every tick so a pass flips to "expired" on time even if a client is late to emit.
   const verdicts = Object.fromEntries(
-    PARTICIPANTS.map((p) => [p.id, effectiveVerdict(states[p.id].verdict, now)]),
+    participants.map((p) => [p.id, effectiveVerdict(states[p.id].verdict, now)]),
   )
-  const selected = PARTICIPANTS.find((p) => p.id === selectedId) ?? PARTICIPANTS[0]
+  const selected = participants.find((p) => p.id === selectedId) ?? participants[0]
 
   const onAlert = useCallback((alert: CallAlert) => {
     setToasts((prev) => [alert, ...prev.filter((t) => t.participantId !== alert.participantId)].slice(0, 3))
@@ -52,7 +52,7 @@ export function InterviewerView() {
       setPanelOpen(true)
     }
   }, [])
-  useKnockAlerts(clients, onAlert)
+  useKnockAlerts(clients, participants, onAlert)
 
   const dismissToast = useCallback((id: string) => setToasts((prev) => prev.filter((t) => t.id !== id)), [])
   const openInKnock = useCallback((participantId: string) => {
@@ -67,7 +67,7 @@ export function InterviewerView() {
   if (ended) {
     return (
       <div className="app app--ended">
-        <TitleBar title={`Knock · Interview with ${participantName(CANDIDATE_ID)}`} />
+        <TitleBar title={`Knock · ${room.title}`} />
         <div className="left-call">
           <PhoneOff size={28} aria-hidden />
           <h1>You left the call</h1>
@@ -81,6 +81,9 @@ export function InterviewerView() {
           >
             Rejoin
           </button>
+          <button type="button" className="button button--outline" onClick={onLeave}>
+            Back to rooms
+          </button>
         </div>
       </div>
     )
@@ -89,7 +92,7 @@ export function InterviewerView() {
   return (
     <div className="app">
       <TitleBar
-        title={`Knock · Interview with ${participantName(CANDIDATE_ID)}`}
+        title={`Knock · ${room.title}`}
         elapsed={formatElapsed(now - callStartedAt)}
       />
       <div className={panelOpen ? 'call call--panel' : 'call'}>
@@ -102,8 +105,8 @@ export function InterviewerView() {
               openInKnock(toast.participantId)
             }}
           />
-          <div className="grid">
-            {PARTICIPANTS.map((p) => (
+          <div className="grid" data-count={participants.length}>
+            {participants.map((p) => (
               <VideoTile
                 key={p.id}
                 participant={p}
@@ -112,7 +115,7 @@ export function InterviewerView() {
                 stream={stream}
                 cameraOn={cameraOn}
                 onSelect={() => setSelectedId(p.id)}
-                onCheckNow={() => clients[p.id].requestCheck()}
+                onCheckNow={p.isSelf ? undefined : () => clients[p.id].requestCheck()}
                 onViewInKnock={() => openInKnock(p.id)}
               />
             ))}
@@ -120,7 +123,7 @@ export function InterviewerView() {
         </main>
         {panelOpen && (
           <KnockPanel
-            participants={PARTICIPANTS}
+            participants={participants}
             verdicts={verdicts}
             selected={selected}
             state={states[selected.id]}
@@ -145,6 +148,7 @@ export function InterviewerView() {
       {reportOpen && (
         <ReportModal
           participantName={selected.name}
+          room={room}
           state={states[selected.id]}
           verdict={verdicts[selected.id]}
           now={now}

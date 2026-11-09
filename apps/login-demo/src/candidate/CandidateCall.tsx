@@ -2,7 +2,8 @@ import { PhoneOff, VideoOff } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNativeEnvironment } from '../environment/hooks.ts'
 import { useEnvironmentReporting } from '../environment/useEnvironmentReporting.ts'
-import { INTERVIEWER_NAME, initials } from '../interviewer/participants.ts'
+import { initials } from '../interviewer/participants.ts'
+import type { Room } from '../rooms.ts'
 import { TitleBar } from '../interviewer/TitleBar.tsx'
 import { VideoView } from '../interviewer/VideoView.tsx'
 import type { KnockClient } from '../knock/types.ts'
@@ -11,12 +12,13 @@ import { ChallengeOverlay } from './ChallengeOverlay.tsx'
 import type { JoinSelection } from './PreJoin.tsx'
 
 interface CandidateCallProps extends JoinSelection {
+  room: Room
   client: KnockClient
   onLeave: () => void
 }
 
 /** The candidate's side of the call. Knock challenges appear over it when the client issues one. */
-export function CandidateCall({ client, cameraId, micId, onLeave }: CandidateCallProps) {
+export function CandidateCall({ room, client, cameraId, micId, onLeave }: CandidateCallProps) {
   const state = useKnockState(client)
   const env = useNativeEnvironment()
   const [stream, setStream] = useState<MediaStream | null>(null)
@@ -47,21 +49,27 @@ export function CandidateCall({ client, cameraId, micId, onLeave }: CandidateCal
     }
   }, [cameraId, micId])
 
+  // The SDK runs its checks on the call's own media.
+  useEffect(() => {
+    client.attachMedia(stream)
+    return () => client.attachMedia(null)
+  }, [client, stream])
+
   // Mid-call device changes go to the client, which marks the result invalid.
   useEnvironmentReporting(client, stream, env)
 
   return (
     <div className="app app--ended">
-      <TitleBar title={`Knock · Interview with ${INTERVIEWER_NAME}`} />
+      <TitleBar title={`Knock · ${room.title}`} />
       <div className="candidate-call">
         {/* TODO(webrtc): the interviewer's remote video. */}
         <div className="tile candidate-call__remote">
           <div className="tile__avatar-wrap">
             <div className="avatar" style={{ background: 'var(--avatar-1)' }}>
-              {initials(INTERVIEWER_NAME)}
+              {initials(room.host.name)}
             </div>
           </div>
-          <div className="tile__name">{INTERVIEWER_NAME}</div>
+          <div className="tile__name">{room.host.name}</div>
           <div className="self-pip">
             {stream ? (
               <VideoView stream={stream} mirrored />

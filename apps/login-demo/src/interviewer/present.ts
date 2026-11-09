@@ -2,6 +2,10 @@ import type { CheckProgress, CheckRow, OverallVerdict } from '../knock/types.ts'
 
 export type Tone = 'pass' | 'fail' | 'review' | 'muted' | 'accent'
 
+export function sentence(text: string): string {
+  return text ? text[0].toUpperCase() + text.slice(1) : text
+}
+
 export function formatAgo(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000))
   if (s < 2) return 'just now'
@@ -94,5 +98,7 @@ export function rowPill(row: CheckRow, verdict: OverallVerdict): { tone: Tone; t
       return { tone: 'review', text: 'Unable' }
     case 'skipped':
       return { tone: 'muted', text: 'Skipped' }
+    case 'not_run':
+      return { tone: 'muted', text: 'Not run' }
   }
 }

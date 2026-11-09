@@ -192,6 +192,7 @@ function initialState(): KnockState {
     alert: null,
     challenge: null,
     lastCapture: null,
+    introspection: null,
   }
 }
 
@@ -214,6 +215,8 @@ function checkMessage(kind: ChallengeKind, result: MockResult): string {
       return `${label} inconclusive — ${result.detail}`
     case 'skipped':
       return `${label} skipped`
+    case 'not_run':
+      return `${label} not run`
   }
 }
 
@@ -255,6 +258,10 @@ export class MockKnockClient implements KnockClient {
     if (next.camera !== env.camera || next.mic !== env.mic || next.displays !== env.displays) {
       this.update({ environment: next })
     }
+  }
+
+  attachMedia(): void {
+    // The mock fakes every signal; it never reads media.
   }
 
   onStep(index: number, color: string, at: number): void {

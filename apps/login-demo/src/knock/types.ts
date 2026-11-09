@@ -1,4 +1,4 @@
-import type { ChallengeKind, CheckStatus, EnvironmentEvidence } from '@knock/shared'
+import type { ChallengeKind, CheckStatus, EnvironmentEvidence, TrustTokenClaims } from '@knock/shared'
 
 /**
  * UI-facing Knock state. Check kinds and per-check statuses come from
@@ -6,11 +6,14 @@ import type { ChallengeKind, CheckStatus, EnvironmentEvidence } from '@knock/sha
  */
 
 /**
- * @knock/shared CheckStatus plus 'review': a signal worth a human look that must
- * not veto on its own (e.g. suspected synthetic voice while false positives are
- * unmeasured). TODO(shared): the shared schema has no 'review' status yet.
+ * @knock/shared CheckStatus plus two UI-only outcomes:
+ * - 'review': worth a human look but never a veto on its own (e.g. suspected
+ *   synthetic voice while false positives are unmeasured);
+ * - 'not_run': the SDK or server doesn't implement this check yet. Shown as
+ *   "Not run", never as a pass.
+ * TODO(shared): the shared schema has neither status yet.
  */
-export type CheckOutcome = CheckStatus | 'review'
+export type CheckOutcome = CheckStatus | 'review' | 'not_run'
 
 export interface CheckOutcomeResult {
   kind: ChallengeKind
@@ -103,6 +106,17 @@ export interface KnockState {
   challenge: ChallengeRequest | null
   /** What the last challenge reported back (steps and audio metadata). */
   lastCapture: ChallengeCapture | null
+  /** Server-side check of the participant's trust token (POST /v1/tokens/introspect). */
+  introspection: Introspection | null
+}
+
+export interface Introspection {
+  checkedAt: number
+  valid: boolean
+  claims?: TrustTokenClaims
+  /** exp of the token the server accepted (its claim schema doesn't return exp). */
+  expiresAt?: number
+  error?: string
 }
 
 /** A challenge to run on the participant's own screen. */
@@ -161,6 +175,8 @@ export interface KnockClient {
   requestCheck(): void
   getState(): KnockState
   reportEnvironment(report: EnvironmentReport): void
+  /** The call's own camera + mic; the SDK never opens its own camera. */
+  attachMedia(stream: MediaStream | null): void
   /** Called once per color step so light analysis can align the schedule with video frames. */
   onStep(index: number, color: string, at: number): void
   /** Microphone audio for the whole reading window, for the voice check. */

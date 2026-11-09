@@ -3,7 +3,7 @@ import { useState } from 'react'
 import type { EnvironmentSnapshot, KnockState, OverallVerdict } from '../knock/types.ts'
 import { ActivityFeed } from './ActivityFeed.tsx'
 import { ChecksList } from './ChecksList.tsx'
-import { initials, type Participant } from './participants.ts'
+import { displayName, initials, type Participant } from './participants.ts'
 import { shortStatus } from './present.ts'
 import { StatusCard } from './StatusCard.tsx'
 import { TokenBlock } from './TokenBlock.tsx'
@@ -76,10 +76,10 @@ export function KnockPanel(props: KnockPanelProps) {
               onClick={() => props.onSelect(p.id)}
             >
               <span className="selector__avatar" style={{ background: p.avatarColor }}>
-                {p.video === 'self' ? <User size={14} aria-hidden /> : initials(p.name)}
+                {p.isSelf ? <User size={14} aria-hidden /> : initials(p.name)}
                 <span className={`selector__dot dot--${status.tone}`} aria-hidden />
               </span>
-              {p.name === 'You' ? 'You' : p.name.split(' ')[0]}
+              {p.isSelf ? 'You' : p.name.split(' ')[0]}
             </button>
           )
         })}
@@ -87,10 +87,10 @@ export function KnockPanel(props: KnockPanelProps) {
 
       <div className="panel__body">
         <div className="panel__subject">
-          <span>{selected.name}</span>
+          <span>{displayName(selected)}</span>
           <span className="muted">{selected.role}</span>
         </div>
-        <StatusCard verdict={verdict} progress={state.progress} now={now} />
+        <StatusCard verdict={verdict} progress={state.progress} checks={state.checks} now={now} />
         {verdict.status === 'verified' && state.token && <TokenBlock token={state.token} now={now} />}
         <EnvironmentChips environment={state.environment} />
 
@@ -118,12 +118,18 @@ export function KnockPanel(props: KnockPanelProps) {
       <div className="panel__actions">
         {showAlternative && (
           <p className="alt-hint">
-            Hang up and call {selected.name === 'You' ? 'back' : selected.name} on a number you already have, or ask
+            Hang up and call {selected.name} on a number you already have, or ask
             something only they would know. Don't use contact details given during this call.
           </p>
         )}
         <div className="panel__buttons">
-          <button type="button" className="button button--accent" onClick={props.onRunCheck} disabled={checking}>
+          <button
+            type="button"
+            className="button button--accent"
+            onClick={props.onRunCheck}
+            disabled={checking || selected.isSelf}
+            title={selected.isSelf ? 'Knock checks other participants' : undefined}
+          >
             <ShieldCheck size={15} aria-hidden />
             {checking ? 'Checking…' : 'Run check now'}
           </button>

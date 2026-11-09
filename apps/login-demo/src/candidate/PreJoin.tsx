@@ -14,7 +14,7 @@ import { describeProcesses } from '../environment/processes.ts'
 import { CAPTURE_PROTECTION_LIMIT } from '../environment/protection.ts'
 import type { Classification, NativeDevice, NativeEnvironment } from '../environment/types.ts'
 import { useStreamBinding } from '../environment/useStreamBinding.ts'
-import { INTERVIEWER_NAME } from '../interviewer/participants.ts'
+import { formatRoomTime, type Room } from '../rooms.ts'
 import { Pill } from '../interviewer/Pill.tsx'
 import type { Tone } from '../interviewer/present.ts'
 import { TitleBar } from '../interviewer/TitleBar.tsx'
@@ -85,7 +85,7 @@ export interface JoinSelection {
   micId: string | null
 }
 
-export function PreJoin({ onJoin }: { onJoin: (selection: JoinSelection) => void }) {
+export function PreJoin({ room, onJoin }: { room: Room; onJoin: (selection: JoinSelection) => void }) {
   const env = useNativeEnvironment()
   const protectedNow = useContentProtection()
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
@@ -197,12 +197,17 @@ export function PreJoin({ onJoin }: { onJoin: (selection: JoinSelection) => void
 
   return (
     <div className="app app--ended">
-      <TitleBar title={`Knock · Interview with ${INTERVIEWER_NAME}`} />
+      <TitleBar title={`Knock · ${room.title}`} />
       <div className="prejoin">
         <section className="prejoin__main">
           <header>
             <h1>Check your camera and mic</h1>
-            <p className="muted">{INTERVIEWER_NAME} is waiting. Knock checks your devices before you join.</p>
+            <p className="muted">
+              {room.host.name} is waiting. Knock checks your devices before you join.
+            </p>
+            <p className="prejoin__room muted">
+              {room.title} · {formatRoomTime(room)} · <span className="mono">{room.display}</span>
+            </p>
           </header>
 
           <div className="preview">

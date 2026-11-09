@@ -1,7 +1,7 @@
 import { Ellipsis, ShieldCheck, PanelRight, VideoOff } from 'lucide-react'
 import { useState } from 'react'
 import type { OverallVerdict } from '../knock/types.ts'
-import { initials, type Participant } from './participants.ts'
+import { displayName, initials, type Participant } from './participants.ts'
 import { shortStatus } from './present.ts'
 import { VideoView } from './VideoView.tsx'
 
@@ -13,7 +13,8 @@ interface VideoTileProps {
   /** Only meaningful for your own tile. */
   cameraOn: boolean
   onSelect: () => void
-  onCheckNow: () => void
+  /** Absent for your own tile: Knock checks other participants. */
+  onCheckNow?: () => void
   onViewInKnock: () => void
 }
 
@@ -69,10 +70,11 @@ export function VideoTile(props: VideoTileProps) {
             <button
               type="button"
               role="menuitem"
-              disabled={verdict.status === 'checking'}
+              disabled={!props.onCheckNow || verdict.status === 'checking'}
+              title={props.onCheckNow ? undefined : 'Knock checks other participants'}
               onClick={() => {
                 setMenuOpen(false)
-                props.onCheckNow()
+                props.onCheckNow?.()
               }}
             >
               <ShieldCheck size={14} aria-hidden />
@@ -93,7 +95,7 @@ export function VideoTile(props: VideoTileProps) {
         )}
       </div>
 
-      <div className="tile__name">{participant.name}</div>
+      <div className="tile__name">{displayName(participant)}</div>
       {participant.video === 'local-demo' && (
         <div className="todo-chip" title="TODO(webrtc): replace with this participant's remote stream">
           Local camera · WebRTC TODO

@@ -1,3 +1,5 @@
+import type { Room } from '../rooms.ts'
+
 export type VideoSource =
   /** The local camera, mirrored: this is you. */
   | 'self'
@@ -13,23 +15,24 @@ export interface Participant {
   video: VideoSource
   /** CSS color for the initials avatar. */
   avatarColor: string
+  /** The person using this window; Knock checks other participants, not you. */
+  isSelf: boolean
 }
 
-// Placeholder roster until the call layer exists.
-export const PARTICIPANTS: Participant[] = [
-  { id: 'you', name: 'You', role: 'Interviewer', video: 'self', avatarColor: 'var(--avatar-1)' },
-  // TODO(webrtc): Amara's tile should show her remote stream; it reuses the local camera for demos.
-  { id: 'amara', name: 'Amara Osei', role: 'Candidate', video: 'local-demo', avatarColor: 'var(--avatar-2)' },
-  { id: 'daniel', name: 'Daniel Cho', role: 'Hiring manager', video: 'avatar', avatarColor: 'var(--avatar-3)' },
-  { id: 'priya', name: 'Priya Raman', role: 'Recruiter', video: 'avatar', avatarColor: 'var(--avatar-4)' },
-]
+export const HOST_ID = 'host'
+export const GUEST_ID = 'guest'
 
-export const CANDIDATE_ID = 'amara'
-/** Name the candidate sees for the person interviewing them. */
-export const INTERVIEWER_NAME = 'Jordan Lee'
+/** The interviewer window's view of a room: you (host) plus the guest. */
+export function roomParticipants(room: Room): Participant[] {
+  return [
+    { id: HOST_ID, ...room.host, video: 'self', avatarColor: 'var(--avatar-1)', isSelf: true },
+    // TODO(webrtc): the guest's remote stream; single-machine demos reuse the local camera.
+    { id: GUEST_ID, ...room.guest, video: 'local-demo', avatarColor: 'var(--avatar-2)', isSelf: false },
+  ]
+}
 
-export function participantName(id: string): string {
-  return PARTICIPANTS.find((p) => p.id === id)?.name ?? id
+export function displayName(p: Participant): string {
+  return p.isSelf ? `${p.name} (You)` : p.name
 }
 
 export function initials(name: string): string {

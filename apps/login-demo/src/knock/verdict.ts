@@ -7,7 +7,9 @@ export const VERDICT_TTL_MS = 30_000
  * Any fail → not verified (veto). Else any inconclusive/skipped → unable.
  * Else any review → needs review (never a veto on its own). Only all-pass is verified.
  */
-export function deriveVerdict(results: CheckOutcomeResult[], now: number): OverallVerdict {
+export function deriveVerdict(all: CheckOutcomeResult[], now: number): OverallVerdict {
+  // Checks that didn't run carry no evidence either way.
+  const results = all.filter((r) => r.status !== 'not_run')
   const failing = results.filter((r) => r.status === 'fail')
   if (failing.length > 0) {
     return {

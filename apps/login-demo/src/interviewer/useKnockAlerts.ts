@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { CHECK_NOUN } from '../knock/checks.ts'
 import type { KnockClients } from '../knock/useKnock.ts'
-import { participantName } from './participants.ts'
+import type { Participant } from './participants.ts'
 
 export interface CallAlert {
   id: string
@@ -16,14 +16,18 @@ let alertSeq = 0
  * Watches every participant's client and reports new failures and mid-call
  * device changes, so they surface even while the Knock panel is closed.
  */
-export function useKnockAlerts(clients: KnockClients, onAlert: (alert: CallAlert) => void): void {
+export function useKnockAlerts(
+  clients: KnockClients,
+  participants: Participant[],
+  onAlert: (alert: CallAlert) => void,
+): void {
   useEffect(() => {
     const offs = Object.entries(clients).map(([participantId, client]) => {
       let prev = client.getState()
       return client.subscribe((next) => {
         const before = prev
         prev = next
-        const name = participantName(participantId)
+        const name = participants.find((p) => p.id === participantId)?.name ?? participantId
 
         if (next.verdict.status === 'not_verified' && next.verdict !== before.verdict) {
           onAlert({
@@ -52,5 +56,5 @@ export function useKnockAlerts(clients: KnockClients, onAlert: (alert: CallAlert
       })
     })
     return () => offs.forEach((off) => off())
-  }, [clients, onAlert])
+  }, [clients, participants, onAlert])
 }

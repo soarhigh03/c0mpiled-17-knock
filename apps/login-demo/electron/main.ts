@@ -25,7 +25,8 @@ function protectionLocked(win: BrowserWindow): boolean {
   return roleOf(win) === 'candidate' && candidateForced
 }
 
-let monitor: EnvironmentMonitor | null = null
+/** One environment monitor per window (its focus/blur is per window). */
+const monitors = new Map<number, EnvironmentMonitor>()
 
 function roleOf(win: BrowserWindow): Role {
   try {
@@ -40,7 +41,7 @@ function syncProtection(win: BrowserWindow): void {
   if (win.isDestroyed()) return
   win.setContentProtection(protectionRequested || protectionLocked(win))
   win.webContents.send('knock-native:content-protection-changed', win.isContentProtected())
-  buildMenu(win)
+  if (win.isFocused()) buildMenu(win)
 }
 
 function load(win: BrowserWindow, role: Role): void {
@@ -54,6 +55,7 @@ function load(win: BrowserWindow, role: Role): void {
   }
 }
 
+/** The application menu acts on the focused window, so it's rebuilt whenever focus moves. */
 function buildMenu(win: BrowserWindow): void {
   const role = roleOf(win)
   const demo: Electron.MenuItemConstructorOptions = {
@@ -67,9 +69,12 @@ function buildMenu(win: BrowserWindow): void {
         enabled: !protectionLocked(win),
         click: (item) => {
           protectionRequested = item.checked
-          syncProtection(win)
+          for (const w of BrowserWindow.getAllWindows()) syncProtection(w)
         },
       },
+      { type: 'separator' },
+      // Single-machine demo: the guest joins the same room from a second window.
+      { label: 'Open Candidate Window', accelerator: 'CmdOrCtrl+Shift+N', click: () => createWindow('candidate') },
       { type: 'separator' },
       { label: 'Interviewer View', type: 'radio', checked: role === 'interviewer', click: () => load(win, 'interviewer') },
       { label: 'Candidate View', type: 'radio', checked: role === 'candidate', click: () => load(win, 'candidate') },
@@ -94,7 +99,8 @@ ipcMain.handle('knock-native:list-video-devices', async () => {
   return JSON.parse(stdout)
 })
 
-ipcMain.handle('knock-native:get-environment', async () => {
+ipcMain.handle('knock-native:get-environment', async (event) => {
+  const monitor = monitors.get(event.sender.id)
   if (!monitor) throw new Error('Environment monitor not ready')
   return monitor.collect()
 })
@@ -103,8 +109,11 @@ ipcMain.handle('knock-native:get-content-protection', (event) => {
   return BrowserWindow.fromWebContents(event.sender)?.isContentProtected() ?? false
 })
 
-function createWindow() {
+function createWindow(role: Role) {
+  const others = BrowserWindow.getAllWindows().length
   const win = new BrowserWindow({
+    // Offset extra windows so the demo's second window doesn't hide the first.
+    ...(others > 0 ? { x: 80 + others * 40, y: 60 + others * 40 } : {}),
     width: 1440,
     height: 900,
     minWidth: 1200,
@@ -123,24 +132,31 @@ function createWindow() {
     },
   })
 
-  monitor = new EnvironmentMonitor(win, (env, reason) => {
+  const contentsId = win.webContents.id
+  const monitor = new EnvironmentMonitor(win, (env, reason) => {
     if (!win.isDestroyed()) win.webContents.send('knock-native:environment-changed', env, reason)
   })
   monitor.start()
+  monitors.set(contentsId, monitor)
+  win.on('closed', () => monitors.delete(contentsId))
+  win.on('focus', () => buildMenu(win))
 
   // Role comes from the URL, so re-apply protection whenever the page changes.
   win.webContents.on('did-navigate', () => syncProtection(win))
   win.webContents.on('did-navigate-in-page', () => syncProtection(win))
   win.webContents.on('did-finish-load', () => syncProtection(win))
 
-  load(win, process.env.KNOCK_ROLE === 'candidate' ? 'candidate' : 'interviewer')
+  load(win, role)
+  return win
 }
 
+const initialRole: Role = process.env.KNOCK_ROLE === 'candidate' ? 'candidate' : 'interviewer'
+
 app.whenReady().then(() => {
-  createWindow()
+  createWindow(initialRole)
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) createWindow(initialRole)
   })
 })
 

@@ -11,8 +11,9 @@ import {
 } from './audio.ts'
 import { createMouthTracker, type FaceModelOptions, type MouthSample, type MouthTracker } from './mouth.ts'
 import {
+  BAND_HIGH_HZ,
+  BAND_LOW_HZ,
   BASEBAND_HZ,
-  DC_CORNER_HZ,
   FRAME_HZ,
   SONAR_PROCESSOR_NAME,
   SONAR_WORKLET_SOURCE,
@@ -172,7 +173,8 @@ export async function probeSonar(options: SonarProbeOptions): Promise<SonarSigna
         carrierHz: options.carrierHz,
         decim,
         frameLen: Math.max(1, Math.round(basebandHz / FRAME_HZ)),
-        dcAlpha: Math.exp((-2 * Math.PI * DC_CORNER_HZ) / basebandHz),
+        dcAlpha: Math.exp((-2 * Math.PI * BAND_LOW_HZ) / basebandHz),
+        lpBeta: Math.exp((-2 * Math.PI * BAND_HIGH_HZ) / basebandHz),
       },
     })
     micSource.connect(demod)

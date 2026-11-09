@@ -73,8 +73,9 @@ npm run typecheck
 ## sonar (SonarGuard)
 
 서버가 세션마다 18–20kHz 캐리어를 뽑아 주고, SDK가 그 톤을 연속 송출하면서 마이크 입력을
-AudioWorklet에서 I/Q 복조 → 1kHz 데시메이션 → DC(직접 경로 + 정적 반사) 제거 → 움직임 에너지로
-바꿉니다. 영상에서는 MediaPipe Face Landmarker로 입 벌림(13–14 / 10–152)을 재고,
+AudioWorklet에서 I/Q 복조 → 1kHz 데시메이션 → 6–45Hz 대역통과 → 움직임 에너지로 바꿉니다.
+대역 하단은 직접 경로·정적 반사·상체 흔들림을, 상단은 손처럼 입술보다 빠른 반사체를 걷어냅니다
+(f_d = 2·v·f/c 기준 19kHz에서 6–45Hz ≈ 0.05–0.4m/s, 발화 중 입술·턱의 속도 범위). 영상에서는 MediaPipe Face Landmarker로 입 벌림(13–14 / 10–152)을 재고,
 `AudioContext.getOutputTimestamp`로 오디오 시계를 `performance.now`에 맞춰 두 시계열을 같은
 타임베이스에 올립니다. 서버는 도플러 에너지와 `|d(입 벌림)/dt|`를 20Hz로 리샘플해 z-score 후
 −400~+100ms 지연을 탐색하며 상호상관합니다 (비대칭인 이유: 카메라 파이프라인이 영상을 늦추므로

@@ -14,7 +14,12 @@ import { bandPeakDb, FILL_MS, median, RAW_MIC, wait } from './audio.ts'
  * the latter says more about room noise than about the speaker.
  */
 
-const DEFAULT_FROM_HZ = 14_000
+/**
+ * Starts above the audible band. Sweeping down into 14–17 kHz is genuinely
+ * unpleasant at probe volume, and a carrier down there could never be used
+ * anyway — callers that need it as a dead-output-path control pass it in.
+ */
+const DEFAULT_FROM_HZ = 17_500
 const DEFAULT_TO_HZ = 22_000
 const DEFAULT_STEP_HZ = 500
 /** Matches the probe, so sweep results transfer directly to a real run. */
@@ -92,8 +97,11 @@ export async function sweepCarrierResponse(options: SweepOptions = {}): Promise<
       return bandPeakDb(spectrum, binHz, hz)
     }
 
-    // Let the first analyser window fill before the first frequency.
+    // Let the first analyser window fill, then throw one read away: a capture
+    // that has only just started still has digital silence in the window, and
+    // the half-empty FFT that produces would poison the first baseline.
     await wait(FILL_MS, options.signal)
+    await settleAndRead(fromHz, 0)
 
     for (let hz = fromHz; hz <= toHz; hz += stepHz) {
       if (options.signal?.aborted) break

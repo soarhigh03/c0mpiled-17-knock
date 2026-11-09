@@ -41,38 +41,45 @@ const MIN_MOUTH_SWING = 0.01
 const PASS_CORRELATION = 0.45
 
 export function verifySonar(challenge: SonarChallenge, ev: SonarEvidence): CheckResult {
-  const snr = `carrier SNR ${fmt(ev.carrierSnrDb)} dB`
+  // Every verdict carries the measurements behind it: a sonar failure is
+  // otherwise impossible to tell apart from bad lighting, a slow landmarker or
+  // a user who started speaking late.
+  const measured = [
+    `carrier SNR ${fmt(ev.carrierSnrDb)} dB`,
+    `doppler ${ev.doppler.length} frames @ ${fmt(rateHz(ev.doppler), 0)} Hz`,
+    `mouth ${ev.mouthAperture.length} frames @ ${fmt(rateHz(ev.mouthAperture), 0)} fps`,
+  ]
+  const verdict = (status: CheckResult['status'], score: number, reasons: string[]): CheckResult => ({
+    kind: 'sonar',
+    status,
+    score,
+    reasons: [...reasons, ...measured],
+  })
 
   // Hardware first: without the carrier there is no measurement to judge.
   if (!(ev.carrierSnrDb >= MIN_CARRIER_SNR_DB)) {
-    return result('inconclusive', 0.5, [
-      `${snr} — probe did not survive this device's speaker/mic path`,
-    ])
+    return verdict('inconclusive', 0.5, ["probe did not survive this device's speaker/mic path"])
   }
   // A client that can't run the landmarker is not a spoof; say so and move on.
   if (ev.mouthAperture.length < MIN_MOUTH_FRAMES) {
-    return result('inconclusive', 0.5, ['no mouth landmarks in evidence', snr])
+    return verdict('inconclusive', 0.5, ['no mouth landmarks in evidence'])
   }
   if (ev.doppler.length < MIN_DOPPLER_FRAMES) {
-    return result('inconclusive', 0.5, ['too few doppler frames', snr])
+    return verdict('inconclusive', 0.5, ['too few doppler frames'])
   }
 
   // Only the span both series cover can be correlated.
   const from = Math.max(firstT(ev.doppler), firstT(ev.mouthAperture))
   const to = Math.min(lastT(ev.doppler), lastT(ev.mouthAperture))
   const coverage = (to - from) / challenge.durationMs
+  measured.push(`overlap ${fmt((to - from) / 1000, 1)}s of ${challenge.durationMs / 1000}s`)
   if (!(coverage >= MIN_COVERAGE)) {
-    return result('inconclusive', 0.5, [
-      `audio and video only overlap for ${Math.round((to - from) / 100) / 10}s of ${
-        challenge.durationMs / 1000
-      }s`,
-      snr,
-    ])
+    return verdict('inconclusive', 0.5, ['audio and video barely overlap'])
   }
   // Timestamps are client-supplied; a window far longer than the one we issued
   // is malformed, and sizing the analysis grid from it would be reckless.
   if (coverage > MAX_COVERAGE) {
-    return result('inconclusive', 0.5, ['timestamps span more than the issued window', snr])
+    return verdict('inconclusive', 0.5, ['timestamps span more than the issued window'])
   }
 
   const times = grid(from, to, GRID_HZ)
@@ -86,8 +93,9 @@ export function verifySonar(challenge: SonarChallenge, ev: SonarEvidence): Check
   )
 
   const swing = extent(mouth)
+  measured.push(`mouth swing ${fmt(swing, 3)} of face height`)
   if (!(swing >= MIN_MOUTH_SWING)) {
-    return result('fail', 0.1, [`mouth never opened (swing ${fmt(swing, 3)} of face height)`, snr])
+    return verdict('fail', 0.1, ['mouth never opened'])
   }
 
   // Doppler magnitude tracks speed, so compare it against mouth *speed*. Both
@@ -96,36 +104,37 @@ export function verifySonar(challenge: SonarChallenge, ev: SonarEvidence): Check
   const echo = energy.slice(1).map((v, i) => (v + energy[i]!) / 2)
 
   const variation = variationCoefficient(echo)
+  measured.push(`echo variation ${fmt(variation, 3)}`)
   if (!(variation >= MIN_DOPPLER_VARIATION)) {
-    return result('fail', 0.1, [
-      `echo is static (variation ${fmt(variation, 3)}) while the video shows a moving mouth`,
-      snr,
-    ])
+    return verdict('fail', 0.1, ['echo is static while the video shows a moving mouth'])
   }
 
   const a = standardise(mouthSpeed)
   const b = standardise(echo)
   if (!a || !b) {
-    return result('fail', 0.1, ['one of the series is flat', snr])
+    return verdict('fail', 0.1, ['one of the series is flat'])
   }
 
   const maxLag = Math.round((MAX_LAG_MS * GRID_HZ) / 1000)
   const { r, lagSamples } = peakCrossCorrelation(a, b, maxLag)
   const lagMs = Math.round((lagSamples * 1000) / GRID_HZ)
-  const detail = `doppler↔mouth r=${fmt(r)} at lag ${lagMs >= 0 ? '+' : ''}${lagMs}ms`
+  measured.unshift(`doppler↔mouth r=${fmt(r)} at lag ${lagMs >= 0 ? '+' : ''}${lagMs}ms`)
 
   return r >= PASS_CORRELATION
-    ? result('pass', scoreFor(r), [detail, snr])
-    : result('fail', scoreFor(r), [`${detail} — movement does not match the lips`, snr])
+    ? verdict('pass', scoreFor(r), [])
+    : verdict('fail', scoreFor(r), ['movement does not match the lips'])
+}
+
+/** Effective sample rate of a series, Hz. */
+function rateHz(series: { t: number }[]): number {
+  if (series.length < 2) return 0
+  const span = lastT(series) - firstT(series)
+  return span > 0 ? ((series.length - 1) * 1000) / span : 0
 }
 
 /** Monotone in r so the aggregate score degrades smoothly, not in steps. */
 function scoreFor(r: number): number {
   return Math.min(1, Math.max(0, (r + 0.05) / 0.65))
-}
-
-function result(status: CheckResult['status'], score: number, reasons: string[]): CheckResult {
-  return { kind: 'sonar', status, score, reasons }
 }
 
 // Reduced rather than spread: these series come from the client, and

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { KnockClient } from '../knock/types.ts'
+import type { RoomLink } from '../room/link.ts'
 import type { Room } from '../rooms.ts'
 import { CandidateCall } from './CandidateCall.tsx'
 import { CodeEntry } from './CodeEntry.tsx'
@@ -7,6 +8,7 @@ import { PreJoin, type JoinSelection } from './PreJoin.tsx'
 
 export interface CandidateSession {
   client: KnockClient
+  link: RoomLink
   disconnect: () => void
 }
 
@@ -39,6 +41,7 @@ export function CandidateApp({ connect }: CandidateAppProps) {
     <CandidateCall
       room={step.room}
       client={step.session.client}
+      link={step.session.link}
       {...step.selection}
       onLeave={() => {
         step.session.disconnect()

@@ -20,7 +20,11 @@
 - `?role=candidate` — 후보자 입장 전 장치 점검 화면 (Electron: `KNOCK_ROLE=candidate` 또는 Demo ▸ Candidate View)
 - 참가자마다 `KnockClient` 하나 (`src/knock/types.ts`). 지금은 `src/knock/mockClient.ts`, 나중에 `@knock/sdk` 기반 구현으로 교체 — UI는 인터페이스만 사용
 - 판정: fail 하나라도 있으면 Not verified, 그다음 unable, 전부 pass면 Verified (30초 후 자동으로 "result expired")
-- 통화 전송 계층이 없어서 You와 Amara(후보자) 타일 모두 로컬 카메라를 씀 (`TODO(webrtc)`)
+- 통화 전송 계층은 `src/room/link.ts`가 고릅니다
+  - 기본 `broadcast` — `BroadcastChannel`, **한 머신의 두 창**끼리만. 영상은 안 옮기므로 상대 타일은 아바타
+  - `peer` — PeerJS 브로커로 WebRTC. **두 사람이 각자 노트북에서** 서로의 카메라를 봅니다.
+    양쪽 `.env`에 `VITE_ROOM_TRANSPORT=peer`(+ 같은 `KNOCK_TOKEN_SECRET`), 또는 `?remote=1`
+  - 공개 브로커라 룸 id가 전역에서 겹칠 수 있고 TURN이 없습니다 — 데모용이지 프로덕션 구성이 아닙니다
 - 개발 모드 전용: `⌘⇧D` 시나리오 스위처 (프로덕션 빌드에는 포함되지 않음)
 
 ## 환경 점검 (macOS)

@@ -5,6 +5,8 @@ import { effectiveVerdict } from '../knock/verdict.ts'
 import { ControlBar } from './ControlBar.tsx'
 import { useLocalCamera, useNow } from './hooks.ts'
 import { KnockPanel } from './KnockPanel.tsx'
+import type { RoomLink } from '../room/link.ts'
+import { useRoomMedia } from '../room/useRoomMedia.ts'
 import type { Room } from '../rooms.ts'
 import { GUEST_ID, type Participant } from './participants.ts'
 import { aggregateTone, formatElapsed } from './present.ts'
@@ -17,10 +19,11 @@ import { VideoTile } from './VideoTile.tsx'
 interface InterviewerViewProps {
   room: Room
   participants: Participant[]
+  link: RoomLink
   onLeave: () => void
 }
 
-export function InterviewerView({ room, participants, onLeave }: InterviewerViewProps) {
+export function InterviewerView({ room, participants, link, onLeave }: InterviewerViewProps) {
   const clients = useKnockClients()
   const states = useKnockStates(clients)
   const now = useNow()
@@ -34,8 +37,12 @@ export function InterviewerView({ room, participants, onLeave }: InterviewerView
   const [toasts, setToasts] = useState<CallAlert[]>([])
   const autoOpened = useRef(false)
 
-  // Your tile and (until the call transport exists) the guest's tile both use this.
   const { stream } = useLocalCamera()
+  const { remote, status } = useRoomMedia(link, stream)
+  // A transport that cannot carry media has no guest video to show, and the
+  // guest tile falls back to an avatar rather than showing your own camera
+  // twice. Over a peer link the guest tile is the guest.
+  const guestStream = link.carriesMedia ? remote : null
 
   // Re-derived every tick so a pass flips to "expired" on time even if a client is late to emit.
   const verdicts = Object.fromEntries(
@@ -105,6 +112,15 @@ export function InterviewerView({ room, participants, onLeave }: InterviewerView
               openInKnock(toast.participantId)
             }}
           />
+          {/* A remote call that silently fails to connect looks exactly like a
+              candidate who has not joined. Say which it is. */}
+          {link.carriesMedia && status.state !== 'connected' && (
+            <div className={status.state === 'error' ? 'link-status link-status--error' : 'link-status'} role="status">
+              {status.state === 'error'
+                ? status.message
+                : `Waiting for ${room.guest.name} to join this room…`}
+            </div>
+          )}
           <div className="grid" data-count={participants.length}>
             {participants.map((p) => (
               <VideoTile
@@ -112,7 +128,7 @@ export function InterviewerView({ room, participants, onLeave }: InterviewerView
                 participant={p}
                 verdict={verdicts[p.id]}
                 selected={p.id === selectedId}
-                stream={stream}
+                stream={p.isSelf ? stream : guestStream}
                 cameraOn={cameraOn}
                 onSelect={() => setSelectedId(p.id)}
                 onCheckNow={p.isSelf ? undefined : () => clients[p.id].requestCheck()}

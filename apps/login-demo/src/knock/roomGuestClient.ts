@@ -1,6 +1,7 @@
 import type { IntrospectResponse } from '@knock/shared'
 import type { Room } from '../rooms.ts'
-import { roomChannelName, type PublishedCheck, type RoomMessage } from '../room/messages.ts'
+import type { RoomLink } from '../room/link.ts'
+import type { PublishedCheck, RoomMessage } from '../room/messages.ts'
 import { CHECK_LABEL } from './checks.ts'
 import { ClientStore, emptyState, jwtExpiry } from './store.ts'
 import type { CheckOutcomeResult, Introspection, KnockClient, OverallVerdict } from './types.ts'
@@ -12,6 +13,8 @@ interface RoomGuestClientOptions {
   apiUrl: string
   /** Shown to the guest as who asked for the check. */
   requestedBy: string
+  /** Owned by the caller — the same link carries the call's media. */
+  link: RoomLink
 }
 
 /**
@@ -20,21 +23,18 @@ interface RoomGuestClientOptions {
  * server confirms the guest's trust token via /v1/tokens/introspect.
  */
 export class RoomGuestClient extends ClientStore implements KnockClient {
-  private readonly channel: BroadcastChannel
   private readonly options: RoomGuestClientOptions
   private joined = false
 
   constructor(options: RoomGuestClientOptions) {
     super(emptyState(options.room.checks, `Waiting for ${options.room.guest.name} to join`))
     this.options = options
-    this.channel = new BroadcastChannel(roomChannelName(options.room.code))
-    this.channel.onmessage = (e: MessageEvent<RoomMessage>) => void this.handle(e.data)
+    options.link.onMessage((message) => void this.handle(message))
     this.post({ type: 'hello' })
   }
 
   dispose(): void {
     this.clearTimers()
-    this.channel.close()
   }
 
   requestCheck(): void {
@@ -48,7 +48,7 @@ export class RoomGuestClient extends ClientStore implements KnockClient {
   }
 
   private post(message: RoomMessage): void {
-    this.channel.postMessage(message)
+    this.options.link.post(message)
   }
 
   private async handle(msg: RoomMessage): Promise<void> {

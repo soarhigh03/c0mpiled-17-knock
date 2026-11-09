@@ -1,15 +1,17 @@
 import type { KnockClient, KnockState } from '../knock/types.ts'
-import type { Room } from '../rooms.ts'
-import { roomChannelName, type EnvironmentEvent, type PublishedCheck, type RoomMessage } from './messages.ts'
+import type { RoomLink } from './link.ts'
+import type { EnvironmentEvent, PublishedCheck, RoomMessage } from './messages.ts'
 
 /**
  * Candidate side of the room channel: publishes presence, check results and
  * environment events from this window's KnockClient, and runs checks the
  * interviewer requests.
+ *
+ * The link is owned by the caller — the same one carries the call's media —
+ * so this closes its subscriptions and leaves the transport alone.
  */
-export function connectRoomPublisher(room: Room, participantId: string, client: KnockClient): () => void {
-  const channel = new BroadcastChannel(roomChannelName(room.code))
-  const post = (message: RoomMessage) => channel.postMessage(message)
+export function connectRoomPublisher(link: RoomLink, participantId: string, client: KnockClient): () => void {
+  const post = (message: RoomMessage) => link.post(message)
   const events: EnvironmentEvent[] = []
   let lastResult: Extract<RoomMessage, { type: 'result' }> | null = null
   let requestedAt: number | null = null
@@ -61,8 +63,7 @@ export function connectRoomPublisher(room: Room, participantId: string, client: 
     }
   })
 
-  channel.onmessage = (e: MessageEvent<RoomMessage>) => {
-    const msg = e.data
+  link.onMessage((msg) => {
     if (msg.type === 'hello') {
       presence()
       if (lastResult) post(lastResult)
@@ -70,7 +71,7 @@ export function connectRoomPublisher(room: Room, participantId: string, client: 
       requestedAt = msg.at
       client.requestCheck()
     }
-  }
+  })
 
   // Native signals the interviewer should know about (Electron only).
   let lastApps = new Set<string>()
@@ -100,7 +101,6 @@ export function connectRoomPublisher(room: Room, participantId: string, client: 
   return () => {
     offClient()
     offNative?.()
-    channel.close()
   }
 }
 

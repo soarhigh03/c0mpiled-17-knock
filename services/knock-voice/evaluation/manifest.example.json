@@ -1,0 +1,49 @@
+{
+  "note": "Template only: consent is false. Set true only after actual consent and supply team members own audio files.",
+  "samples": [
+    {
+      "id": "member1-human-direct",
+      "path": "samples/member1-human.wav",
+      "speaker_id": "member1",
+      "kind": "human",
+      "capture": "direct",
+      "codec": "original",
+      "team_member": true,
+      "consent": false,
+      "generator": "human recording"
+    },
+    {
+      "id": "member1-tts-direct",
+      "path": "samples/member1-tts.wav",
+      "speaker_id": "member1",
+      "kind": "tts",
+      "capture": "direct",
+      "codec": "original",
+      "team_member": true,
+      "consent": false,
+      "generator": "record tool and model version here"
+    },
+    {
+      "id": "member1-vc-direct",
+      "path": "samples/member1-vc.wav",
+      "speaker_id": "member1",
+      "kind": "vc",
+      "capture": "direct",
+      "codec": "original",
+      "team_member": true,
+      "consent": false,
+      "generator": "record tool, source speaker consent and model version here"
+    },
+    {
+      "id": "member1-tts-mic",
+      "path": "samples/member1-tts-speaker-mic.wav",
+      "speaker_id": "member1",
+      "kind": "tts",
+      "capture": "speaker_mic",
+      "codec": "original",
+      "team_member": true,
+      "consent": false,
+      "generator": "same TTS file played through speaker, captured with physical microphone"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+✔ server adapter keeps model score out of main UI payload (5.524494ms)
+✔ mismatched room/session and malformed result become Unable (1.84758ms)
+✔ HTTP errors and network failures become Unable (1.123897ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 128.07552

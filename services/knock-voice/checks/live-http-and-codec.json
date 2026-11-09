@@ -1,0 +1,43 @@
+{
+  "kind": "engineering signals only; not speech or model accuracy",
+  "http": {
+    "health": {
+      "status": 503,
+      "body": {
+        "ready": false,
+        "model": "pella-v2",
+        "startup_error": "ModuleNotFoundError"
+      }
+    },
+    "silence": {
+      "status": 200,
+      "decision": "Unable",
+      "reason": "silence_or_very_low_level"
+    },
+    "harmonic": {
+      "status": 200,
+      "decision": "Unable",
+      "reason": "model_unavailable"
+    }
+  },
+  "opus": [
+    {
+      "kbps": 16,
+      "sr": 16000,
+      "channels": 1,
+      "samples": 64000,
+      "dtype": "int16",
+      "quality_reason": null,
+      "model_inference_run": false
+    },
+    {
+      "kbps": 24,
+      "sr": 16000,
+      "channels": 1,
+      "samples": 64000,
+      "dtype": "int16",
+      "quality_reason": null,
+      "model_inference_run": false
+    }
+  ]
+}

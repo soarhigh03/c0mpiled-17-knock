@@ -286,6 +286,7 @@ export async function runSonar(challenge: SonarChallenge, ctx: RunContext): Prom
     video: ctx.video,
     carrierHz: challenge.carrierHz,
     durationMs: challenge.durationMs,
+    signal: ctx.signal,
   })
   return { kind: 'sonar', ...signals }
 }

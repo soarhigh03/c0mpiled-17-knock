@@ -20,6 +20,14 @@ const CARRIER_GAIN = 0.2
 const FADE_MS = 150
 /** Time for the DC tracker to settle before the measured window opens. */
 const WARMUP_MS = 400
+/**
+ * Grace period between showing the prompt and opening the window. Reading the
+ * prompt, drawing breath and the first syllable all land in here. Inside the
+ * window they would be a second or more of a still mouth — usually next to a
+ * shifting posture, i.e. movement the lips don't explain — which drags the
+ * correlation down for an honest user.
+ */
+const LEAD_IN_MS = 1_200
 /** Carrier SNR is sampled repeatedly and reduced to a median. */
 const SNR_INTERVAL_MS = 500
 const FFT_SIZE = 8192
@@ -46,7 +54,12 @@ export interface SonarProbeOptions {
   signal?: AbortSignal
   faceModel?: FaceModelOptions
   /** Fired once the measured window opens — this is when the user must speak. */
-  onStart?: () => void
+  /**
+   * Fired once the carrier is up and settled, `LEAD_IN_MS` before the window
+   * opens. This — not the window itself — is when the user must be told to
+   * start speaking.
+   */
+  onReady?: () => void
   onDoppler?: (sample: DopplerSample) => void
   onMouth?: (sample: MouthSample) => void
   onCarrierSnrDb?: (db: number) => void
@@ -138,6 +151,11 @@ export async function probeSonar(options: SonarProbeOptions): Promise<SonarSigna
 
     await wait(WARMUP_MS, options.signal)
 
+    // Ask now, measure shortly after, so the user is already mid-sentence when
+    // the window opens.
+    options.onReady?.()
+    await wait(LEAD_IN_MS, options.signal)
+
     // Audio runs on its own clock. Anchor it to performance.now() once so the
     // Doppler series and the video series share a timebase; over a window this
     // short the two clocks don't drift enough to matter, and the verifier
@@ -174,7 +192,6 @@ export async function probeSonar(options: SonarProbeOptions): Promise<SonarSigna
     snrTimer = setInterval(readSnr, SNR_INTERVAL_MS)
     readSnr()
 
-    options.onStart?.()
     await wait(options.durationMs, options.signal)
 
     gain.gain.cancelScheduledValues(ac.currentTime)
@@ -212,7 +229,7 @@ export async function runSonar(challenge: SonarChallenge, ctx: RunContext): Prom
       video: ctx.video,
       carrierHz: challenge.carrierHz,
       durationMs: challenge.durationMs,
-      onStart: () => ctx.onPrompt?.(SONAR_PROMPT),
+      onReady: () => ctx.onPrompt?.(SONAR_PROMPT),
     })
     return { kind: 'sonar', ...signals }
   } finally {

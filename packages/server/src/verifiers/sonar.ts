@@ -43,7 +43,7 @@ const MIN_DOPPLER_FRAMES = 20
 const MIN_MOUTH_FRAMES = 10
 /** Doppler RMS has to vary this much relative to its mean to count as movement. */
 const MIN_DOPPLER_VARIATION = 0.05
-/** Mouth has to swing this much, as a fraction of face height. */
+/** Mouth has to swing this much, as a fraction of face height, to be speech. */
 const MIN_MOUTH_SWING = 0.01
 /**
  * How far the peak must rise above coincidence to call the two series the
@@ -109,8 +109,11 @@ export function verifySonar(challenge: SonarChallenge, ev: SonarEvidence): Check
 
   const swing = extent(mouth)
   measured.push(`mouth swing ${fmt(swing, 3)} of face height`)
+  // Passive check: the window lands wherever the conversation happens to be,
+  // so a still mouth usually means the candidate was listening. There is
+  // nothing to correlate and nothing to hold against them.
   if (!(swing >= MIN_MOUTH_SWING)) {
-    return verdict('fail', 0.1, ['mouth never opened'])
+    return verdict('inconclusive', 0.5, ['no speech in this window'])
   }
 
   // Doppler magnitude tracks speed, so compare it against mouth *speed*. Both

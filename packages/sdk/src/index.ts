@@ -3,7 +3,6 @@ export { createKnock, type KnockClient, type KnockOptions, type RunContext } fro
 /** Raw sonar probe, for hardware bring-up. The verdict still comes from the server. */
 export {
   probeSonar,
-  SONAR_PROMPT,
   type CarrierReading,
   type DopplerSample,
   type SonarProbeOptions,

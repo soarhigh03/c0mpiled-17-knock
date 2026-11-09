@@ -19,17 +19,6 @@ import {
   type SonarFrameMessage,
 } from './sonar-worklet.ts'
 
-/**
- * What the user has to do for the probe to see anything.
- *
- * Deliberately open-ended: a fixed "count to 10" finishes before the window
- * does, and the leftover seconds are silence plus the idle movement of someone
- * who thinks they are done — motion the lips don't explain, which costs an
- * honest user correlation. Clearing the prompt is the signal to stop.
- */
-export const SONAR_PROMPT = '화면이 바뀔 때까지 1부터 천천히 소리 내어 세어주세요'
-const SONAR_PREPARING = '마이크와 얼굴 추적을 준비하고 있습니다…'
-
 /** Carrier amplitude: loud enough to survive the room, still inaudible. */
 const CARRIER_GAIN = 0.2
 /** Ramp length at both ends; a hard gate would click audibly. */
@@ -37,11 +26,9 @@ const FADE_MS = 150
 /** Time for the DC tracker to settle before the measured window opens. */
 const WARMUP_MS = 400
 /**
- * Grace period between showing the prompt and opening the window. Reading the
- * prompt, drawing breath and the first syllable all land in here. Inside the
- * window they would be a second or more of a still mouth — usually next to a
- * shifting posture, i.e. movement the lips don't explain — which drags the
- * correlation down for an honest user.
+ * Extra settling before the window opens, on top of the DC warm-up: the face
+ * landmarker's first inferences take hundreds of ms (shader compilation) and
+ * belong outside the measurement.
  */
 const LEAD_IN_MS = 1_200
 /** Carrier SNR is sampled repeatedly and reduced to a median. */
@@ -68,11 +55,7 @@ export interface SonarProbeOptions {
   /** Ends the probe early and returns whatever was collected. */
   signal?: AbortSignal
   faceModel?: FaceModelOptions
-  /**
-   * Fired once the carrier is up and settled, `LEAD_IN_MS` before the window
-   * opens. This — not the window itself — is when the user must be told to
-   * start speaking.
-   */
+  /** Fired when the measured window opens. Nothing is asked of the user. */
   onReady?: () => void
   onDoppler?: (sample: DopplerSample) => void
   onMouth?: (sample: MouthSample) => void
@@ -201,9 +184,9 @@ export async function probeSonar(options: SonarProbeOptions): Promise<SonarSigna
 
     // The window opens one lead-in from now. Both pipelines start immediately
     // and timestamp against that future instant, so everything they emit while
-    // the user is reading the prompt comes out negative and is dropped: the
-    // landmarker's first inferences (shader compilation, hundreds of ms) and
-    // the rest of the DC settling stay outside the measurement.
+    // settling comes out negative and is dropped: the landmarker's first
+    // inferences (shader compilation, hundreds of ms) and the tail of the DC
+    // warm-up stay outside the measurement.
     const t0 = performance.now() + LEAD_IN_MS
 
     // Audio runs on its own clock. Anchor it to performance.now() once so the
@@ -275,18 +258,22 @@ export async function probeSonar(options: SonarProbeOptions): Promise<SonarSigna
  * Emit the server's carrier, record the echo, and hand back the movement
  * energy next to the mouth aperture seen in video. The server decides whether
  * the two agree.
+ *
+ * Deliberately passive: nothing is shown and nothing is asked. The point of
+ * this check is that it runs underneath a real conversation, and an interview
+ * that stops to make the candidate recite something is a worse product.
+ *
+ * Natural speech is also the better stimulus. A scripted count is close to
+ * periodic, and a periodic mouth lines up with a periodic echo at almost any
+ * lag, which leaves the correlation unable to tell a real match from a
+ * coincidence. Spontaneous speech — irregular pauses, varying rate, sentence
+ * boundaries — carries the timing structure the correlation needs.
  */
 export async function runSonar(challenge: SonarChallenge, ctx: RunContext): Promise<SonarEvidence> {
-  ctx.onPrompt?.(SONAR_PREPARING)
-  try {
-    const signals = await probeSonar({
-      video: ctx.video,
-      carrierHz: challenge.carrierHz,
-      durationMs: challenge.durationMs,
-      onReady: () => ctx.onPrompt?.(SONAR_PROMPT),
-    })
-    return { kind: 'sonar', ...signals }
-  } finally {
-    ctx.onPrompt?.(null)
-  }
+  const signals = await probeSonar({
+    video: ctx.video,
+    carrierHz: challenge.carrierHz,
+    durationMs: challenge.durationMs,
+  })
+  return { kind: 'sonar', ...signals }
 }

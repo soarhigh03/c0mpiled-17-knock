@@ -118,7 +118,7 @@ function createWindow(role: Role) {
     height: 900,
     minWidth: 1200,
     minHeight: 760,
-    title: 'Knock',
+    title: 'preSense',
     backgroundColor: '#202124',
     // The renderer draws its own title bar (src/interviewer/TitleBar.tsx).
     ...(process.platform === 'darwin'

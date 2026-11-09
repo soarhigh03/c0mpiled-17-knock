@@ -13,7 +13,7 @@ interface VideoTileProps {
   /** Only meaningful for your own tile. */
   cameraOn: boolean
   onSelect: () => void
-  /** Absent for your own tile: Knock checks other participants. */
+  /** Absent for your own tile: preSense checks other participants. */
   onCheckNow?: () => void
   onViewInKnock: () => void
 }
@@ -44,7 +44,7 @@ export function VideoTile(props: VideoTileProps) {
       <button
         type="button"
         className="tile__select"
-        aria-label={`Show ${participant.name} in Knock`}
+        aria-label={`Show ${participant.name} in preSense`}
         aria-pressed={selected}
         onClick={props.onSelect}
       />
@@ -71,7 +71,7 @@ export function VideoTile(props: VideoTileProps) {
               type="button"
               role="menuitem"
               disabled={!props.onCheckNow || verdict.status === 'checking'}
-              title={props.onCheckNow ? undefined : 'Knock checks other participants'}
+              title={props.onCheckNow ? undefined : 'preSense checks other participants'}
               onClick={() => {
                 setMenuOpen(false)
                 props.onCheckNow?.()
@@ -89,7 +89,7 @@ export function VideoTile(props: VideoTileProps) {
               }}
             >
               <PanelRight size={14} aria-hidden />
-              View in Knock
+              View in preSense
             </button>
           </div>
         )}

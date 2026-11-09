@@ -88,7 +88,7 @@ export function connectRoomPublisher(room: Room, participantId: string, client: 
       }
       lastDisplays = env.displays.length
     } else if (reason === 'focus' && env.windowFocused && env.focus.lastBlurMs !== null) {
-      emitEvent({ at, kind: 'focus', tone: 'review', message: `Left the Knock window for ${(env.focus.lastBlurMs / 1000).toFixed(1)} s` })
+      emitEvent({ at, kind: 'focus', tone: 'review', message: `Left the preSense window for ${(env.focus.lastBlurMs / 1000).toFixed(1)} s` })
     }
   })
   void window.knockNative?.getEnvironment().then((env) => {

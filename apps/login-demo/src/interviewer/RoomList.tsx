@@ -7,7 +7,7 @@ import { TitleBar } from './TitleBar.tsx'
 export function RoomList({ onStart }: { onStart: (room: Room) => void }) {
   return (
     <div className="app app--ended">
-      <TitleBar title="Knock" />
+      <TitleBar title="preSense" />
       <div className="rooms">
         <header>
           <h1>Your rooms</h1>

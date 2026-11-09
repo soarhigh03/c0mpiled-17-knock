@@ -27,13 +27,13 @@ export function CodeEntry({ onContinue }: { onContinue: (room: Room) => void }) 
 
   return (
     <div className="app app--ended">
-      <TitleBar title="Knock" />
+      <TitleBar title="preSense" />
       <div className="entry">
         <form className="entry__card" onSubmit={submit} noValidate>
           <span className="brand__logo brand__logo--lg">
             <KeyRound size={22} aria-hidden />
           </span>
-          <h1>Join a Knock room</h1>
+          <h1>Join a preSense room</h1>
           <p className="muted">Enter the code from your invitation.</p>
 
           <label className="entry__field">

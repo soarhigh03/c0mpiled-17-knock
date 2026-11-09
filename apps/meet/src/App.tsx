@@ -51,7 +51,7 @@ function App() {
 
   return (
     <main style={{ maxWidth: 720, margin: '0 auto', padding: 16, textAlign: 'left' }}>
-      <h1>Knock Meet</h1>
+      <h1>preSense Meet</h1>
       <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', background: '#000' }} />
       <div style={{ display: 'flex', gap: 8, margin: '12px 0' }}>
         <button onClick={startCamera} disabled={!!stream}>카메라 켜기</button>

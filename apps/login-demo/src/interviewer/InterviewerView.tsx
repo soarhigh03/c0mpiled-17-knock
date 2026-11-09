@@ -67,7 +67,7 @@ export function InterviewerView({ room, participants, onLeave }: InterviewerView
   if (ended) {
     return (
       <div className="app app--ended">
-        <TitleBar title={`Knock · ${room.title}`} />
+        <TitleBar title={`preSense · ${room.title}`} />
         <div className="left-call">
           <PhoneOff size={28} aria-hidden />
           <h1>You left the call</h1>
@@ -92,7 +92,7 @@ export function InterviewerView({ room, participants, onLeave }: InterviewerView
   return (
     <div className="app">
       <TitleBar
-        title={`Knock · ${room.title}`}
+        title={`preSense · ${room.title}`}
         elapsed={formatElapsed(now - callStartedAt)}
       />
       <div className={panelOpen ? 'call call--panel' : 'call'}>

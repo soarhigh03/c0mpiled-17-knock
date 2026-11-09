@@ -264,6 +264,11 @@ export class MockKnockClient implements KnockClient {
     // The mock fakes every signal; it never reads media.
   }
 
+  attachPanelHost(): void {
+    // No SDK, so no panel ring — the mock path still uses the full-window
+    // ChallengeOverlay. See docs/light.md §6 ("의도적으로 열어둔 것").
+  }
+
   onStep(index: number, color: string, at: number): void {
     const capture = this.state.lastCapture
     const challenge = this.state.challenge

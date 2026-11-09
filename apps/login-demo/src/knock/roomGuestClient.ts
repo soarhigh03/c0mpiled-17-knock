@@ -165,6 +165,7 @@ export class RoomGuestClient extends ClientStore implements KnockClient {
 
   reportEnvironment(): void {}
   attachMedia(): void {}
+  attachPanelHost(): void {}
   onStep(): void {}
   onChallengeAudio(): void {}
   endChallenge(): void {}

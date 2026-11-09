@@ -1,5 +1,5 @@
 import { PhoneOff, VideoOff } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNativeEnvironment } from '../environment/hooks.ts'
 import { useEnvironmentReporting } from '../environment/useEnvironmentReporting.ts'
 import { initials } from '../interviewer/participants.ts'
@@ -23,6 +23,7 @@ export function CandidateCall({ room, client, cameraId, micId, onLeave }: Candid
   const env = useNativeEnvironment()
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const callRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -55,13 +56,19 @@ export function CandidateCall({ room, client, cameraId, micId, onLeave }: Candid
     return () => client.attachMedia(null)
   }, [client, stream])
 
+  // The light check's panels frame this element: the call, not the window.
+  useEffect(() => {
+    client.attachPanelHost(callRef.current)
+    return () => client.attachPanelHost(null)
+  }, [client])
+
   // Mid-call device changes go to the client, which marks the result invalid.
   useEnvironmentReporting(client, stream, env)
 
   return (
     <div className="app app--ended">
       <TitleBar title={`Knock · ${room.title}`} />
-      <div className="candidate-call">
+      <div className="candidate-call" ref={callRef}>
         {/* TODO(webrtc): the interviewer's remote video. */}
         <div className="tile candidate-call__remote">
           <div className="tile__avatar-wrap">

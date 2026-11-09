@@ -10,16 +10,15 @@ import { deriveVerdict } from './verdict.ts'
  * Which checks can produce a real result end to end today. Anything else is
  * shown as "Not run" and never sent, so it can't pass by default.
  *
- * - light: packages/server verifiers/light.ts returns "not implemented yet";
- *   the SDK also draws its own overlay and can't take our challenge screen's
- *   step timestamps.
  * - voice: the SDK sends empty audio and can't take a recording; the server
  *   verifier is not implemented.
  * - sonar runs: a passive ~15 s window that needs the candidate to be talking.
+ * - light runs: the SDK puts its own panel ring around the window, so unlike
+ *   the mock path it does not need the challenge screen's step timestamps.
  */
 export const NOT_RUN_REASON: Record<ChallengeKind, string | null> = {
   environment: null,
-  light: 'Not run — server light verifier not implemented yet',
+  light: null,
   sonar: null,
   voice: 'Not run — SDK sends no audio and server verifier not implemented yet',
 }
@@ -57,6 +56,7 @@ export class SdkKnockClient extends ClientStore implements KnockClient {
   private readonly checkOnAttach: boolean
   private stream: MediaStream | null = null
   private video: HTMLVideoElement | null = null
+  private panelHost: HTMLElement | null = null
   private watching = false
   private autoChecked = false
 
@@ -79,6 +79,10 @@ export class SdkKnockClient extends ClientStore implements KnockClient {
       this.autoChecked = true
       this.after(800, () => this.requestCheck())
     }
+  }
+
+  attachPanelHost(element: HTMLElement | null): void {
+    this.panelHost = element
   }
 
   requestCheck(): void {
@@ -138,6 +142,8 @@ export class SdkKnockClient extends ClientStore implements KnockClient {
       const res = await this.knock.verify(runnable, {
         stream,
         video: this.videoFor(stream),
+        // The light panels frame the call, not the window — see attachPanelHost.
+        panelHost: this.panelHost ?? undefined,
         onResult: (result) => {
           const outcome = toOutcome(result)
           this.setRow(result.kind, { status: outcome.status, detail: outcome.detail, score: result.score, reasons: result.reasons, at: Date.now() })

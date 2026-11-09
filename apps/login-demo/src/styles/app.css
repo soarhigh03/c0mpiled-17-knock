@@ -1365,6 +1365,10 @@ a:focus-visible {
 /* ---------- candidate call ---------- */
 
 .candidate-call {
+  /* The light check's panel ring is placed against this element's padding box
+     (see KnockClient.attachPanelHost), so it has to establish a containing
+     block — otherwise the strips escape to the window and cover the title bar. */
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;

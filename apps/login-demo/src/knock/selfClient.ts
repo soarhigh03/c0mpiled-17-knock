@@ -11,6 +11,7 @@ export class SelfClient extends ClientStore implements KnockClient {
   requestCheck(): void {}
   reportEnvironment(): void {}
   attachMedia(): void {}
+  attachPanelHost(): void {}
   onStep(): void {}
   onChallengeAudio(): void {}
   endChallenge(): void {}

@@ -67,7 +67,7 @@ export function CandidateCall({ room, client, cameraId, micId, onLeave }: Candid
 
   return (
     <div className="app app--ended">
-      <TitleBar title={`Knock · ${room.title}`} />
+      <TitleBar title={`preSense · ${room.title}`} />
       <div className="candidate-call" ref={callRef}>
         {/* TODO(webrtc): the interviewer's remote video. */}
         <div className="tile candidate-call__remote">
@@ -91,7 +91,7 @@ export function CandidateCall({ room, client, cameraId, micId, onLeave }: Candid
         <div className="candidate-call__bar">
           <span className="muted" aria-live="polite">
             {state.verdict.status === 'checking'
-              ? 'Knock check running — keep talking naturally'
+              ? 'preSense check running — keep talking naturally'
               : 'Interview in progress'}
           </span>
           <button type="button" className="end-button" onClick={onLeave}>

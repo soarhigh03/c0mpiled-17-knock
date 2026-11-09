@@ -15,7 +15,7 @@ export interface Participant {
   video: VideoSource
   /** CSS color for the initials avatar. */
   avatarColor: string
-  /** The person using this window; Knock checks other participants, not you. */
+  /** The person using this window; preSense checks other participants, not you. */
   isSelf: boolean
 }
 

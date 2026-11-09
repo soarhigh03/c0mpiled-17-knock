@@ -144,12 +144,12 @@ export function ChallengeOverlay({ challenge, client, stream }: ChallengeOverlay
       style={{ backgroundColor: challenge.colors[index] }}
       role="dialog"
       aria-modal="true"
-      aria-label="Knock check"
+      aria-label="preSense check"
     >
       <div className="challenge__center">
         <div className="challenge__chip">
           <ShieldCheck size={15} aria-hidden />
-          Knock check · requested by {challenge.requestedBy}
+          preSense check · requested by {challenge.requestedBy}
         </div>
 
         <div className="challenge__card">

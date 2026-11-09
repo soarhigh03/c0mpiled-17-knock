@@ -67,7 +67,7 @@ export function ControlBar(props: ControlBarProps) {
         <BarButton icon={Users} label="Participants" />
         <BarButton
           icon={ShieldCheck}
-          label="Knock"
+          label="preSense"
           pressed={props.panelOpen}
           onClick={props.onToggleKnock}
           badge={props.knockTone && <span className={`bar-button__dot dot--${props.knockTone}`} aria-hidden />}

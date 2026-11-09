@@ -39,7 +39,7 @@ interface Row {
   status: RowStatus
 }
 
-const NO_NATIVE: Classification = { verdict: 'review', reason: 'Native device check needs the Knock desktop app' }
+const NO_NATIVE: Classification = { verdict: 'review', reason: 'Native device check needs the preSense desktop app' }
 
 function classifyByLabel(label: string, natives: NativeDevice[] | undefined): Classification {
   if (!natives) return NO_NATIVE
@@ -197,13 +197,13 @@ export function PreJoin({ room, onJoin }: { room: Room; onJoin: (selection: Join
 
   return (
     <div className="app app--ended">
-      <TitleBar title={`Knock · ${room.title}`} />
+      <TitleBar title={`preSense · ${room.title}`} />
       <div className="prejoin">
         <section className="prejoin__main">
           <header>
             <h1>Check your camera and mic</h1>
             <p className="muted">
-              {room.host.name} is waiting. Knock checks your devices before you join.
+              {room.host.name} is waiting. preSense checks your devices before you join.
             </p>
             <p className="prejoin__room muted">
               {room.title} · {formatRoomTime(room)} · <span className="mono">{room.display}</span>
@@ -216,7 +216,7 @@ export function PreJoin({ room, onJoin }: { room: Room; onJoin: (selection: Join
                 <TriangleAlert size={28} aria-hidden />
                 <strong>Camera blocked</strong>
                 <p>
-                  “{normalizeLabel(selectedCamera.label)}” is a virtual device. Knock only accepts a built-in or USB camera.
+                  “{normalizeLabel(selectedCamera.label)}” is a virtual device. preSense only accepts a built-in or USB camera.
                 </p>
                 <button
                   type="button"
@@ -302,8 +302,9 @@ export function PreJoin({ room, onJoin }: { room: Room; onJoin: (selection: Join
           </ul>
 
           <div className="consent">
-            During the interview Knock may briefly change your screen color, play an inaudible tone, and ask you to
-            read a short phrase. Only the signals needed for these checks are sent for verification.
+            During the interview preSense may briefly flash light panels around the call window, play an inaudible
+            tone, and ask you to read a short phrase. Only the signals needed for these checks are sent for
+            verification.
           </div>
 
           <button

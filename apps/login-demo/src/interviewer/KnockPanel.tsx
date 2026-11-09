@@ -48,7 +48,7 @@ export function KnockPanel(props: KnockPanelProps) {
   const hasReport = state.checks.some((c) => c.at !== undefined)
 
   return (
-    <aside className="panel" aria-label="Knock">
+    <aside className="panel" aria-label="preSense">
       <header className="panel__head">
         <div className="brand">
           <span className="brand__logo">
@@ -128,7 +128,7 @@ export function KnockPanel(props: KnockPanelProps) {
             className="button button--accent"
             onClick={props.onRunCheck}
             disabled={checking || selected.isSelf}
-            title={selected.isSelf ? 'Knock checks other participants' : undefined}
+            title={selected.isSelf ? 'preSense checks other participants' : undefined}
           >
             <ShieldCheck size={15} aria-hidden />
             {checking ? 'Checking…' : 'Run check now'}
@@ -145,7 +145,7 @@ export function KnockPanel(props: KnockPanelProps) {
       </div>
 
       <footer className="panel__foot">
-        Knock checks that a live person is responding in this call. It does not prove identity or approve payments.
+        preSense checks that a live person is responding in this call. It does not prove identity or approve payments.
       </footer>
     </aside>
   )

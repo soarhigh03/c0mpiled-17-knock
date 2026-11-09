@@ -21,7 +21,7 @@ export const CHECK_HINT: Record<ChallengeKind, string> = {
 export const CHECK_RUNNING: Record<ChallengeKind, string> = {
   environment: 'Scanning devices and focus…',
   light: 'Flashing challenge colors…',
-  sonar: 'Emitting near-ultrasonic probe…',
+  sonar: 'Listening for ~15 s while they talk…',
   voice: 'Listening to read-aloud phrase…',
 }
 

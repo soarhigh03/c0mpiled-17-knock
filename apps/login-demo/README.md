@@ -42,12 +42,12 @@
 
 ### SDK/서버에 아직 없는 것 (packages/* — 이 앱에서는 수정하지 않음)
 
-지금은 environment만 실제로 실행하고, 나머지는 "Not run"으로 표시 (가짜 pass 없음).
+environment와 sonar는 실제로 실행하고, light·voice는 "Not run"으로 표시 (가짜 pass 없음). PR #1(sonar-guard) 반영 기준.
 
 1. **SDK가 챌린지를 외부에 노출하지 않음** — `verify()`가 세션 생성·챌린지 실행을 내부에서 모두 처리. 서버가 발급한 색 순서·문구를 앱이 받아 자체 화면(C)에 그릴 방법이 없음. 필요: `startSession(checks)` → challenges 반환 + `submitEvidence(kind, evidence)` 같은 저수준 API, 또는 `KnockApi` export
-2. **light**: SDK `runLight`가 자체 오버레이를 그림. 필요: 외부 렌더러 훅 (예: `onStep(index, color, performance.now())` 타임스탬프를 받아 같은 시계로 비디오 프레임을 샘플링). 서버 `verifiers/light.ts`는 "not implemented yet"
+2. **light**: SDK `runLight`가 자체 오버레이를 그림. 필요: 외부 렌더러 훅 (예: `onStep(index, color, performance.now())` 타임스탬프를 받아 같은 시계로 비디오 프레임을 샘플링). 서버 `verifiers/light.ts`는 여전히 "not implemented yet"
 3. **voice**: SDK `runVoice`가 빈 오디오를 보냄. 필요: 녹음 Blob(+ startedAt/endedAt/sampleRate)을 받아 16 kHz mono WAV base64로 변환하는 입력. 서버 `verifiers/voice.ts` 미구현. 서버 문구(7–9 단어)는 ~4초 음성에 비해 짧음 (앱은 10–14 단어 사용)
-4. **sonar**: SDK가 Doppler 에너지·입 벌림을 0으로 보냄. 자체 마이크를 따로 열어 통화 마이크/녹음과 충돌 가능. 서버 `verifiers/sonar.ts` 미구현
+4. **sonar (구현됨, 제약 있음)**: 15초 수동 관찰이라 그동안 후보자가 말해야 함 — 말이 없으면 inconclusive. SDK가 자체 raw 마이크를 따로 열고, MediaPipe wasm/모델을 런타임에 CDN(jsdelivr, storage.googleapis.com)에서 받음 (오프라인·CSP 환경에서 실패 → skipped). 챌린지 화면(C)의 녹음과 마이크를 공유하지 않음
 5. **environment**: 서버가 *목록에 있는* 가상 장치를 모두 실패 처리 (선택된 장치가 아니라). OBS 카메라 확장이 설치된 Mac은 OBS를 꺼도 항상 fail. 필요: EnvironmentEvidence에 선택된 장치 id/label + 네이티브 분류(transport) 필드
-6. **집계**: `inconclusive`가 점수 0.5로 집계에 들어가 부분 구현 상태에서는 `human=true`가 될 수 없음 (그래서 미구현 체크는 아예 보내지 않음)
+6. **집계**: 이제 inconclusive는 점수에서 빠지지만, 요청한 체크 가중치의 50% 이상이 pass/fail로 결정돼야 `human=true` (`minDecidedCoverage`). sonar(가중치 0.4)가 inconclusive면 environment만으로는 통과 불가. 미구현 체크(light, voice)는 아예 요청하지 않으므로 커버리지를 깎지 않음
 7. **shared 스키마**: `CheckStatus`에 `review`/`not_run` 없음. introspect 응답의 claims에 `exp`가 빠짐 (zod가 제거)

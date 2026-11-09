@@ -82,7 +82,11 @@ export function CandidateCall({ room, client, cameraId, micId, onLeave }: Candid
           </div>
         </div>
         <div className="candidate-call__bar">
-          <span className="muted">Interview in progress</span>
+          <span className="muted" aria-live="polite">
+            {state.verdict.status === 'checking'
+              ? 'Knock check running — keep talking naturally'
+              : 'Interview in progress'}
+          </span>
           <button type="button" className="end-button" onClick={onLeave}>
             <PhoneOff size={15} aria-hidden /> Leave
           </button>

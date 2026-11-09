@@ -13,15 +13,14 @@ import { deriveVerdict } from './verdict.ts'
  * - light: packages/server verifiers/light.ts returns "not implemented yet";
  *   the SDK also draws its own overlay and can't take our challenge screen's
  *   step timestamps.
- * - sonar: the SDK reports zero Doppler energy (TODO in sdk/challenges/sonar.ts)
- *   and the server verifier is not implemented.
  * - voice: the SDK sends empty audio and can't take a recording; the server
  *   verifier is not implemented.
+ * - sonar runs: a passive ~15 s window that needs the candidate to be talking.
  */
 export const NOT_RUN_REASON: Record<ChallengeKind, string | null> = {
   environment: null,
   light: 'Not run — server light verifier not implemented yet',
-  sonar: 'Not run — SDK sonar capture and server verifier not implemented yet',
+  sonar: null,
   voice: 'Not run — SDK sends no audio and server verifier not implemented yet',
 }
 
@@ -86,11 +85,26 @@ export class SdkKnockClient extends ClientStore implements KnockClient {
     void this.run()
   }
 
+  /**
+   * The SDK samples frames from this element (sonar's mouth landmarks use
+   * requestVideoFrameCallback), so it has to be attached and playing, just invisible.
+   */
   private videoFor(stream: MediaStream): HTMLVideoElement {
     if (!this.video) {
       this.video = document.createElement('video')
       this.video.muted = true
       this.video.playsInline = true
+      this.video.setAttribute('aria-hidden', 'true')
+      Object.assign(this.video.style, {
+        position: 'fixed',
+        left: '0',
+        top: '0',
+        width: '2px',
+        height: '2px',
+        opacity: '0',
+        pointerEvents: 'none',
+      })
+      document.body.appendChild(this.video)
     }
     if (this.video.srcObject !== stream) {
       this.video.srcObject = stream
@@ -128,6 +142,12 @@ export class SdkKnockClient extends ClientStore implements KnockClient {
           const outcome = toOutcome(result)
           this.setRow(result.kind, { status: outcome.status, detail: outcome.detail, score: result.score, reasons: result.reasons, at: Date.now() })
           this.log(outcome.status === 'pass' ? 'pass' : outcome.status === 'fail' ? 'fail' : 'review', `${CHECK_LABEL[result.kind]}: ${outcome.detail}`)
+        },
+        // A check that threw (e.g. mic denied, landmark model unreachable) is scored "skipped" by the server.
+        onCheckError: (kind, error) => {
+          const message = error instanceof Error ? error.message : String(error)
+          this.setRow(kind, { status: 'skipped', detail: `Couldn't run — ${message}`, reasons: [message], at: Date.now() })
+          this.log('review', `${CHECK_LABEL[kind]} couldn't run: ${message}`)
         },
       })
       const now = Date.now()

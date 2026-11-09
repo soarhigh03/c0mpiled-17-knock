@@ -158,10 +158,12 @@ export async function probeSonar(options: SonarProbeOptions): Promise<SonarSigna
 
     await wait(WARMUP_MS, options.signal)
 
-    // Ask now, measure shortly after, so the user is already mid-sentence when
-    // the window opens.
-    options.onReady?.()
-    await wait(LEAD_IN_MS, options.signal)
+    // The window opens one lead-in from now. Both pipelines start immediately
+    // and timestamp against that future instant, so everything they emit while
+    // the user is reading the prompt comes out negative and is dropped: the
+    // landmarker's first inferences (shader compilation, hundreds of ms) and
+    // the rest of the DC settling stay outside the measurement.
+    const t0 = performance.now() + LEAD_IN_MS
 
     // Audio runs on its own clock. Anchor it to performance.now() once so the
     // Doppler series and the video series share a timebase; over a window this
@@ -170,13 +172,11 @@ export async function probeSonar(options: SonarProbeOptions): Promise<SonarSigna
     const stamp = ac.getOutputTimestamp()
     const anchorContext = stamp.contextTime ?? ac.currentTime
     const anchorPerf = stamp.performanceTime ?? performance.now()
-    const t0 = performance.now()
     const audioToElapsed = (sample: number) =>
       anchorPerf + (sample / ac.sampleRate - anchorContext) * 1000 - t0
 
     demod.port.onmessage = (event: MessageEvent<SonarFrameMessage>) => {
       const t = audioToElapsed(event.data.sample)
-      // Frames queued during warm-up, while the DC tracker was still settling.
       if (t < 0) return
       const sample = { t, energy: event.data.rms }
       doppler.push(sample)
@@ -184,9 +184,13 @@ export async function probeSonar(options: SonarProbeOptions): Promise<SonarSigna
     }
 
     tracker?.track(t0, (sample) => {
+      if (sample.t < 0) return
       mouthAperture.push(sample)
       options.onMouth?.(sample)
     })
+
+    options.onReady?.()
+    await wait(LEAD_IN_MS, options.signal)
 
     const spectrum = new Float32Array(analyser.frequencyBinCount)
     const readSnr = () => {

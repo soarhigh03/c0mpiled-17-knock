@@ -1,4 +1,4 @@
-import type { ChallengeKind, CheckStatus } from '@knock/shared'
+import type { ChallengeKind, CheckStatus, EnvironmentEvidence } from '@knock/shared'
 
 /**
  * UI-facing Knock state. Check kinds and per-check statuses come from
@@ -85,9 +85,27 @@ export interface KnockState {
   alert: KnockAlert | null
 }
 
+export interface DeviceChange {
+  device: 'camera' | 'microphone'
+  from: string
+  to: string
+  reason: string
+}
+
+/** What the participant's device reports about its environment. */
+export interface EnvironmentReport {
+  /** In the @knock/shared EnvironmentEvidence shape, for the server. */
+  evidence: EnvironmentEvidence
+  activeCamera: string | null
+  activeMicrophone: string | null
+  /** Set when the live stream moved to a different device mid-call. */
+  change?: DeviceChange
+}
+
 /** The only surface the UI talks to; the mock is swapped for the real SDK later. */
 export interface KnockClient {
   subscribe(listener: (state: KnockState) => void): () => void
   requestCheck(): void
   getState(): KnockState
+  reportEnvironment(report: EnvironmentReport): void
 }

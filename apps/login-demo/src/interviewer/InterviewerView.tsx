@@ -1,5 +1,8 @@
 import { PhoneOff } from 'lucide-react'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { normalizeLabel, toEnvironmentEvidence } from '../environment/evidence.ts'
+import { useNativeEnvironment } from '../environment/hooks.ts'
+import { useStreamBinding, type DeviceMismatch } from '../environment/useStreamBinding.ts'
 import { useKnockClients, useKnockStates } from '../knock/useKnock.ts'
 import { effectiveVerdict } from '../knock/verdict.ts'
 import { ControlBar } from './ControlBar.tsx'
@@ -12,6 +15,8 @@ import { TitleBar } from './TitleBar.tsx'
 import { Toasts } from './Toasts.tsx'
 import { useKnockAlerts, type CallAlert } from './useKnockAlerts.ts'
 import { VideoTile } from './VideoTile.tsx'
+
+const label = (track: MediaStreamTrack | undefined) => (track ? normalizeLabel(track.label) : null)
 
 export function InterviewerView() {
   const clients = useKnockClients()
@@ -29,6 +34,32 @@ export function InterviewerView() {
 
   // Both "You" and the candidate tile use this until the call transport exists.
   const { stream } = useLocalCamera()
+
+  // TODO(webrtc): this binding belongs on the candidate's machine. For single-machine demos the
+  // candidate tile shows the local camera, so its device report goes into the candidate's client.
+  const nativeEnv = useNativeEnvironment()
+  const candidateClient = clients[CANDIDATE_ID]
+  const reportEnvironment = useCallback(
+    async (change?: DeviceMismatch) => {
+      const devices = await navigator.mediaDevices.enumerateDevices()
+      candidateClient.reportEnvironment({
+        evidence: toEnvironmentEvidence({
+          devices,
+          env: nativeEnv,
+          isFullscreen: document.fullscreenElement != null,
+          userAgent: navigator.userAgent,
+        }),
+        activeCamera: label(stream?.getVideoTracks()[0]),
+        activeMicrophone: label(stream?.getAudioTracks()[0]),
+        change: change && { ...change, from: normalizeLabel(change.from), to: normalizeLabel(change.to) },
+      })
+    },
+    [candidateClient, nativeEnv, stream],
+  )
+  const binding = useStreamBinding(stream, nativeEnv, (mismatch) => void reportEnvironment(mismatch))
+  useEffect(() => {
+    if (binding.cameraLabel) void reportEnvironment()
+  }, [binding.cameraLabel, reportEnvironment])
 
   // Re-derived every tick so a pass flips to "expired" on time even if a client is late to emit.
   const verdicts = Object.fromEntries(
@@ -60,7 +91,7 @@ export function InterviewerView() {
   if (ended) {
     return (
       <div className="app app--ended">
-        <TitleBar candidateName={participantName(CANDIDATE_ID)} />
+        <TitleBar title={`Knock · Interview with ${participantName(CANDIDATE_ID)}`} />
         <div className="left-call">
           <PhoneOff size={28} aria-hidden />
           <h1>You left the call</h1>
@@ -81,7 +112,10 @@ export function InterviewerView() {
 
   return (
     <div className="app">
-      <TitleBar candidateName={participantName(CANDIDATE_ID)} elapsed={formatElapsed(now - callStartedAt)} />
+      <TitleBar
+        title={`Knock · Interview with ${participantName(CANDIDATE_ID)}`}
+        elapsed={formatElapsed(now - callStartedAt)}
+      />
       <div className={panelOpen ? 'call call--panel' : 'call'}>
         <main className="stage-area">
           <Toasts

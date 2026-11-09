@@ -25,6 +25,8 @@ export const PARTICIPANTS: Participant[] = [
 ]
 
 export const CANDIDATE_ID = 'amara'
+/** Name the candidate sees for the person interviewing them. */
+export const INTERVIEWER_NAME = 'Jordan Lee'
 
 export function participantName(id: string): string {
   return PARTICIPANTS.find((p) => p.id === id)?.name ?? id

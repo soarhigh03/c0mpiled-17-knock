@@ -26,6 +26,8 @@ export function useLocalCamera(): { stream: MediaStream | null; error: string | 
           return
         }
         acquired = s
+        // Dev hook: lets scripted tests swap the track to simulate a mid-call device change.
+        if (import.meta.env.DEV) (window as Window & { __knockLocalStream?: MediaStream }).__knockLocalStream = s
         setStream(s)
       })
       .catch((e: unknown) => {

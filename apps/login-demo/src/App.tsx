@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react'
-import { CandidatePlaceholder } from './candidate/CandidatePlaceholder.tsx'
+import { PreJoin } from './candidate/PreJoin.tsx'
 import { NativeDevices } from './debug/NativeDevices.tsx'
 import { InterviewerView } from './interviewer/InterviewerView.tsx'
 import { CANDIDATE_ID, PARTICIPANTS } from './interviewer/participants.ts'
@@ -19,7 +19,7 @@ const params = new URLSearchParams(window.location.search)
 
 export function App() {
   if (params.get('debug') === 'devices') return <NativeDevices />
-  if (params.get('role') === 'candidate') return <CandidatePlaceholder />
+  if (params.get('role') === 'candidate') return <PreJoin />
   return (
     <KnockContext value={clients}>
       <InterviewerView />

@@ -5,11 +5,13 @@
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "node scripts/build-native.mjs && vite",
+    "build": "node scripts/build-native.mjs && tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "test": "node --test 'src/**/*.test.ts'",
+    "build:native": "node scripts/build-native.mjs"
   },
   "dependencies": {
     "@knock/shared": "*",

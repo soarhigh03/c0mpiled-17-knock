@@ -3,6 +3,8 @@ import { CHECK_HINT, CHECK_LABEL, CHECK_ORDER, CHECK_RUNNING } from './checks.ts
 import type {
   ActivityTone,
   CheckRow,
+  DeviceChange,
+  EnvironmentReport,
   EnvironmentSnapshot,
   KnockClient,
   KnockState,
@@ -175,6 +177,23 @@ export class MockKnockClient implements KnockClient {
     this.startRun(/virtual|obs/i.test(camera) ? virtualCameraPlan(camera) : PASS)
   }
 
+  reportEnvironment(report: EnvironmentReport): void {
+    if (report.change) {
+      this.changeDevice(report.change)
+      return
+    }
+    const env = this.state.environment
+    const next: EnvironmentSnapshot = {
+      ...env,
+      camera: report.activeCamera ?? env.camera,
+      mic: report.activeMicrophone ?? env.mic,
+      displays: report.evidence.screenCount ?? env.displays,
+    }
+    if (next.camera !== env.camera || next.mic !== env.mic || next.displays !== env.displays) {
+      this.update({ environment: next })
+    }
+  }
+
   /** Dev only: jump to a canned scenario. */
   runScenario(scenario: Scenario): void {
     this.reset()
@@ -191,7 +210,14 @@ export class MockKnockClient implements KnockClient {
         return this.completeInstantly(LIGHT_UNABLE)
       case 'device_changed':
         this.completeInstantly(PASS)
-        this.after(1500, () => this.changeCamera(VIRTUAL_CAMERA))
+        this.after(1500, () =>
+          this.changeDevice({
+            device: 'camera',
+            from: this.state.environment.camera,
+            to: VIRTUAL_CAMERA,
+            reason: 'Track moved to another device',
+          }),
+        )
         return
     }
   }
@@ -335,12 +361,13 @@ export class MockKnockClient implements KnockClient {
     this.log('review', 'Result expired — run a new check')
   }
 
-  private changeCamera(next: string): void {
+  private changeDevice(change: DeviceChange): void {
     this.stop()
-    const prev = this.state.environment.camera
     const at = Date.now()
+    const key = change.device === 'camera' ? 'camera' : 'mic'
+    const noun = change.device === 'camera' ? 'Camera' : 'Microphone'
     this.update({
-      environment: { ...this.state.environment, camera: next, changed: 'camera' },
+      environment: { ...this.state.environment, [key]: change.to, changed: key },
       verdict: { status: 'unable', at, cause: 'device_changed', reason: 'Device changed mid-call' },
       token: null,
       progress: null,
@@ -348,10 +375,10 @@ export class MockKnockClient implements KnockClient {
         id: nextId(),
         at,
         title: 'Device changed mid-call',
-        message: `Camera switched from “${prev}” to “${next}”. The earlier result no longer applies.`,
+        message: `${noun} switched from “${change.from}” to “${change.to}” (${change.reason.toLowerCase()}). The earlier result no longer applies.`,
       },
     })
-    this.log('review', `Camera changed mid-call: ${prev} → ${next}`, at)
+    this.log('review', `${noun} changed mid-call: ${change.from} → ${change.to}`, at)
   }
 
   private reset(): void {

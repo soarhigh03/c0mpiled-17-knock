@@ -1,16 +1,9 @@
 import { Ellipsis, ShieldCheck, PanelRight, VideoOff } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import type { OverallVerdict } from '../knock/types.ts'
 import { initials, type Participant } from './participants.ts'
 import { shortStatus } from './present.ts'
-
-function VideoView({ stream, mirrored }: { stream: MediaStream; mirrored?: boolean }) {
-  const ref = useRef<HTMLVideoElement>(null)
-  useEffect(() => {
-    if (ref.current) ref.current.srcObject = stream
-  }, [stream])
-  return <video ref={ref} autoPlay playsInline muted className={mirrored ? 'video video--mirrored' : 'video'} />
-}
+import { VideoView } from './VideoView.tsx'
 
 interface VideoTileProps {
   participant: Participant

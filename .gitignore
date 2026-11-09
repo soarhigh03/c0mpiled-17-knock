@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 dist-electron
+apps/login-demo/native/bin/
 *.local
 
 # Editor directories and files

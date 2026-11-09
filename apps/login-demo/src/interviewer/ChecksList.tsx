@@ -10,9 +10,11 @@ export function ChecksList({ checks, verdict }: { checks: CheckRow[]; verdict: O
       {checks.map((row) => {
         const Icon = CHECK_ICON[row.kind]
         const pill = rowPill(row, verdict)
-        const highlight = verdict.status === 'not_verified' && verdict.failing.includes(row.kind)
+        const failing = verdict.status === 'not_verified' && verdict.failing.includes(row.kind)
+        const reviewing = verdict.status === 'needs_review' && verdict.reviewing.includes(row.kind)
+        const cls = failing ? 'check-row check-row--fail' : reviewing ? 'check-row check-row--review' : 'check-row'
         return (
-          <li key={row.kind} className={highlight ? 'check-row check-row--fail' : 'check-row'}>
+          <li key={row.kind} className={cls}>
             <span className={`check-row__icon check-row__icon--${pill.tone}`}>
               <Icon size={16} aria-hidden />
             </span>

@@ -79,7 +79,7 @@ export function ReportModal({ participantName, state, verdict, now, onClose }: R
               <tr>
                 <th scope="col">Check</th>
                 <th scope="col">Result</th>
-                <th scope="col">Score</th>
+                <th scope="col">Model score</th>
                 <th scope="col">Checked at</th>
               </tr>
             </thead>

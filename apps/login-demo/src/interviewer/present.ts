@@ -40,6 +40,8 @@ export function badgeFor(
       return { tone: 'pass', text: `Human verified · ${formatAgo(now - verdict.verifiedAt)}` }
     case 'not_verified':
       return { tone: 'fail', text: 'Not verified' }
+    case 'needs_review':
+      return { tone: 'review', text: 'Needs review' }
     case 'unable':
       if (verdict.cause === 'expired') return { tone: 'review', text: 'Unable to verify — result expired' }
       if (verdict.cause === 'device_changed') return { tone: 'review', text: 'Unable to verify — device changed' }
@@ -58,6 +60,8 @@ export function shortStatus(verdict: OverallVerdict): { tone: Tone; text: string
       return { tone: 'pass', text: 'Verified' }
     case 'not_verified':
       return { tone: 'fail', text: 'Not verified' }
+    case 'needs_review':
+      return { tone: 'review', text: 'Needs review' }
     case 'unable':
       return { tone: 'review', text: 'Unable to verify' }
   }
@@ -66,7 +70,7 @@ export function shortStatus(verdict: OverallVerdict): { tone: Tone; text: string
 /** Worst result across participants, for the Knock button dot. Null until someone has a result. */
 export function aggregateTone(verdicts: OverallVerdict[]): Tone | null {
   if (verdicts.some((v) => v.status === 'not_verified')) return 'fail'
-  if (verdicts.some((v) => v.status === 'unable')) return 'review'
+  if (verdicts.some((v) => v.status === 'unable' || v.status === 'needs_review')) return 'review'
   if (verdicts.some((v) => v.status === 'verified')) return 'pass'
   return null
 }
@@ -84,6 +88,8 @@ export function rowPill(row: CheckRow, verdict: OverallVerdict): { tone: Tone; t
       return { tone: 'pass', text: 'Pass' }
     case 'fail':
       return { tone: 'fail', text: 'Fail' }
+    case 'review':
+      return { tone: 'review', text: 'Review' }
     case 'inconclusive':
       return { tone: 'review', text: 'Unable' }
     case 'skipped':

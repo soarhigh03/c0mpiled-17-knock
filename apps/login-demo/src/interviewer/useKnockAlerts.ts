@@ -33,6 +33,14 @@ export function useKnockAlerts(clients: KnockClients, onAlert: (alert: CallAlert
             message: `${name}: ${CHECK_NOUN[next.verdict.failing[0]]} check failed — verify another way`,
           })
         }
+        if (next.verdict.status === 'needs_review' && next.verdict !== before.verdict) {
+          onAlert({
+            id: `alert-${++alertSeq}`,
+            participantId,
+            tone: 'review',
+            message: `${name}: ${CHECK_NOUN[next.verdict.reviewing[0]]} check needs review — verify another way`,
+          })
+        }
         if (next.alert && next.alert.id !== before.alert?.id) {
           onAlert({
             id: `alert-${++alertSeq}`,

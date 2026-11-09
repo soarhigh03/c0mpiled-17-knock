@@ -1,7 +1,11 @@
-import type { ChallengeKind, CheckResult, CheckStatus, TrustTokenClaims } from '@knock/shared'
+import type { ChallengeKind, CheckStatus, TrustTokenClaims } from '@knock/shared'
 import { CHECK_HINT, CHECK_LABEL, CHECK_ORDER, CHECK_RUNNING } from './checks.ts'
 import type {
   ActivityTone,
+  ChallengeAudioMeta,
+  ChallengeRequest,
+  CheckOutcome,
+  CheckOutcomeResult,
   CheckRow,
   DeviceChange,
   EnvironmentReport,
@@ -17,10 +21,18 @@ import { deriveVerdict } from './verdict.ts'
  * and results locally; nothing here is a real judgement.
  */
 
-type MockResult = Pick<CheckResult, 'status' | 'score' | 'reasons'> & { detail: string }
+type MockResult = Pick<CheckOutcomeResult, 'status' | 'score' | 'reasons'> & { detail: string }
 type Plan = Record<ChallengeKind, MockResult>
 
-export type Scenario = 'idle' | 'checking' | 'verified' | 'voice_fail' | 'unable' | 'device_changed'
+export type Scenario =
+  | 'idle'
+  | 'checking'
+  | 'verified'
+  | 'voice_review'
+  | 'light_fail'
+  | 'unable'
+  | 'device_changed'
+  | 'challenge'
 
 const STEP_MS: Record<ChallengeKind, number> = {
   environment: 900,
@@ -47,16 +59,29 @@ const PASS: Plan = {
   environment: { status: 'pass', score: 0.97, reasons: [], detail: '1 camera · 1 mic · 1 display · no virtual devices' },
   light: { status: 'pass', score: 0.91, reasons: [], detail: `Face reflected ${LIGHT_FRAMES} of ${LIGHT_FRAMES} screen flashes` },
   sonar: { status: 'pass', score: 0.88, reasons: [], detail: 'Doppler echo matched lip movement' },
-  voice: { status: 'pass', score: 0.93, reasons: [], detail: 'Natural speech, no synthesis artifacts' },
+  voice: { status: 'pass', score: 0.93, reasons: [], detail: 'No clear synthetic signal' },
 }
 
-const VOICE_FAIL: Plan = {
+// Voice policy: a suspected synthetic voice is "review", never a veto on its own.
+// The model score stays out of the main UI (report modal only).
+const VOICE_REVIEW: Plan = {
   ...PASS,
   voice: {
-    status: 'fail',
+    status: 'review',
     score: 0.12,
-    reasons: ['Synthetic speech artifacts detected'],
-    detail: 'Synthetic speech artifacts detected (score 0.12)',
+    reasons: ['Synthetic speech suspected'],
+    detail: 'Synthetic speech suspected — review',
+  },
+}
+
+/** Keeps the red path testable now that voice no longer fails. */
+const LIGHT_FAIL: Plan = {
+  ...PASS,
+  light: {
+    status: 'fail',
+    score: 0.08,
+    reasons: ["Face reflection didn't follow the screen colors"],
+    detail: "Face reflection didn't follow the screen colors",
   },
 }
 
@@ -78,6 +103,39 @@ function virtualCameraPlan(camera: string): Plan {
 let idCounter = 0
 const nextId = () => `k${++idCounter}`
 
+/** Saturated, mutually distinct colors; the server picks the real sequence. */
+export const CHALLENGE_PALETTE = ['#FF1A1A', '#00E05A', '#1A4DFF', '#FFE600', '#FF1AD9', '#00E5FF', '#FF7A00', '#8A1AFF']
+
+/** 10–14 words each (about 4–6 s read aloud); the voice model needs at least ~4 s of speech. */
+export const CHALLENGE_PHRASES = [
+  'The river glass is seven steps from the old stone bridge.',
+  'Morning trains carry yellow paper boxes past the quiet northern harbor.',
+  'A small green kite drifted over the market just before noon.',
+  'Please place the silver key beside the third window on the left.',
+  'Four tall candles lit the narrow hallway near the garden door.',
+  'Our neighbor painted the wooden fence blue during the long summer weekend.',
+]
+
+export const CHALLENGE_STEPS = 8
+export const CHALLENGE_STEP_MS = 850
+
+/** Random colors with no color repeated back to back. */
+export function createMockChallenge(requestedBy: string, random: () => number = Math.random): ChallengeRequest {
+  const colors: string[] = []
+  while (colors.length < CHALLENGE_STEPS) {
+    const next = CHALLENGE_PALETTE[Math.floor(random() * CHALLENGE_PALETTE.length)]
+    if (next !== colors[colors.length - 1]) colors.push(next)
+  }
+  return {
+    id: `chl_${nextId()}`,
+    colors,
+    stepMs: CHALLENGE_STEP_MS,
+    phrase: CHALLENGE_PHRASES[Math.floor(random() * CHALLENGE_PHRASES.length)],
+    sonar: true,
+    requestedBy,
+  }
+}
+
 function randomBytes(n: number): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(n))
 }
@@ -87,12 +145,13 @@ function base64url(input: string | Uint8Array): string {
   return btoa(binary).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_')
 }
 
-function mockJwt(sessionId: string, results: CheckResult[], issuedAt: number, expiresAt: number): string {
+function mockJwt(sessionId: string, results: CheckOutcomeResult[], issuedAt: number, expiresAt: number): string {
   const claims: TrustTokenClaims & { iat: number; exp: number } = {
     sub: sessionId,
     human: true,
     score: Number((results.reduce((s, r) => s + r.score, 0) / results.length).toFixed(2)),
-    checks: Object.fromEntries(results.map((r) => [r.kind, r.status])),
+    // Only issued when every check passed, so 'review' never reaches the shared claim type.
+    checks: Object.fromEntries(results.map((r) => [r.kind, r.status as CheckStatus])),
     iat: Math.floor(issuedAt / 1000),
     exp: Math.floor(expiresAt / 1000),
   }
@@ -131,10 +190,12 @@ function initialState(): KnockState {
     environment: { ...DEFAULT_ENV },
     activity: [{ id: nextId(), at: Date.now(), tone: 'info', message: 'Monitoring started — no check yet' }],
     alert: null,
+    challenge: null,
+    lastCapture: null,
   }
 }
 
-function toneFor(status: CheckStatus): ActivityTone {
+function toneFor(status: CheckOutcome): ActivityTone {
   if (status === 'pass') return 'pass'
   if (status === 'fail') return 'fail'
   return 'review'
@@ -147,6 +208,8 @@ function checkMessage(kind: ChallengeKind, result: MockResult): string {
       return `${label} passed`
     case 'fail':
       return `${label} failed — ${result.detail}`
+    case 'review':
+      return `${label} needs review — ${result.detail}`
     case 'inconclusive':
       return `${label} inconclusive — ${result.detail}`
     case 'skipped':
@@ -194,6 +257,46 @@ export class MockKnockClient implements KnockClient {
     }
   }
 
+  onStep(index: number, color: string, at: number): void {
+    const capture = this.state.lastCapture
+    const challenge = this.state.challenge
+    if (!challenge || !capture || capture.challengeId !== challenge.id) return
+    // The screen may report a step twice (e.g. React StrictMode in dev); keep the first frame time.
+    if (capture.steps.some((s) => s.index === index)) return
+    this.update({ lastCapture: { ...capture, steps: [...capture.steps, { index, color, at }] } })
+  }
+
+  onChallengeAudio(audio: Blob, meta: ChallengeAudioMeta): void {
+    const capture = this.state.lastCapture
+    if (!capture) return
+    // TODO(sdk): upload for the voice check; the mock only keeps the metadata.
+    this.update({ lastCapture: { ...capture, audio: { ...meta, bytes: audio.size, type: audio.type } } })
+  }
+
+  endChallenge(id: string): void {
+    if (this.state.challenge?.id !== id) return
+    const capture = this.state.lastCapture
+    this.update({
+      challenge: null,
+      lastCapture: capture && { ...capture, completedAt: Date.now() },
+    })
+    this.log('info', `Challenge finished — ${capture?.steps.length ?? 0} color steps recorded`)
+  }
+
+  /** Mock stand-in for the interviewer requesting a check on this participant. */
+  issueChallenge(requestedBy: string): void {
+    const challenge = createMockChallenge(requestedBy)
+    this.update({
+      challenge,
+      lastCapture: { challengeId: challenge.id, steps: [], audio: null, completedAt: null },
+    })
+    this.log('info', `Challenge requested by ${requestedBy}`)
+  }
+
+  scheduleChallenge(delayMs: number, requestedBy: string): void {
+    this.after(delayMs, () => this.issueChallenge(requestedBy))
+  }
+
   /** Dev only: jump to a canned scenario. */
   runScenario(scenario: Scenario): void {
     this.reset()
@@ -204,8 +307,12 @@ export class MockKnockClient implements KnockClient {
         return this.startRun(PASS)
       case 'verified':
         return this.completeInstantly(PASS)
-      case 'voice_fail':
-        return this.completeInstantly(VOICE_FAIL)
+      case 'voice_review':
+        return this.completeInstantly(VOICE_REVIEW)
+      case 'light_fail':
+        return this.completeInstantly(LIGHT_FAIL)
+      case 'challenge':
+        return this.issueChallenge('Jordan Lee')
       case 'unable':
         return this.completeInstantly(LIGHT_UNABLE)
       case 'device_changed':
@@ -323,7 +430,7 @@ export class MockKnockClient implements KnockClient {
   }
 
   private complete(plan: Plan, now: number): void {
-    const results: CheckResult[] = CHECK_ORDER.map((kind) => ({
+    const results: CheckOutcomeResult[] = CHECK_ORDER.map((kind) => ({
       kind,
       status: plan[kind].status,
       score: plan[kind].score,
@@ -346,6 +453,8 @@ export class MockKnockClient implements KnockClient {
       this.log('pass', `Verified — trust token issued, valid ${Math.round((verdict.expiresAt - now) / 1000)} s`, now)
     } else if (verdict.status === 'not_verified') {
       this.log('fail', `Not verified — ${verdict.failing.map((k) => CHECK_LABEL[k]).join(', ')} failed`, now)
+    } else if (verdict.status === 'needs_review') {
+      this.log('review', `Needs review — ${verdict.reviewing.map((k) => CHECK_LABEL[k]).join(', ')}`, now)
     } else if (verdict.status === 'unable') {
       this.log('review', `Unable to verify — ${verdict.reason}`, now)
     }

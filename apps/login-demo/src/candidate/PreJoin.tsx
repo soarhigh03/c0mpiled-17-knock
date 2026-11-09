@@ -1,6 +1,5 @@
 import {
   Camera,
-  CircleCheck,
   Mic,
   Monitor,
   ShieldCheck,
@@ -81,7 +80,12 @@ function environmentRows(env: NativeEnvironment | null, protectedNow: boolean): 
   ]
 }
 
-export function PreJoin() {
+export interface JoinSelection {
+  cameraId: string
+  micId: string | null
+}
+
+export function PreJoin({ onJoin }: { onJoin: (selection: JoinSelection) => void }) {
   const env = useNativeEnvironment()
   const protectedNow = useContentProtection()
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
@@ -89,7 +93,6 @@ export function PreJoin() {
   const [micId, setMicId] = useState<string | null>(null)
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [mediaError, setMediaError] = useState<string | null>(null)
-  const [joined, setJoined] = useState(false)
 
   const refreshDevices = useCallback(async () => {
     setDevices(await navigator.mediaDevices.enumerateDevices())
@@ -133,7 +136,7 @@ export function PreJoin() {
   // Never open a blocked device; the preview shows the blocked panel instead.
   const selectedMicId = selectedMic?.deviceId ?? null
   useEffect(() => {
-    if (!cameraId || joined) return
+    if (!cameraId) return
     const wantVideo = !cameraBlocked
     const wantAudio = selectedMicId !== null && !micBlocked
     if (!wantVideo && !wantAudio) return
@@ -160,7 +163,7 @@ export function PreJoin() {
       opened?.getTracks().forEach((t) => t.stop())
       setStream(null)
     }
-  }, [cameraId, cameraBlocked, selectedMicId, micBlocked, joined])
+  }, [cameraId, cameraBlocked, selectedMicId, micBlocked])
 
   // The live track label must match an allowed device, not just the selector.
   const binding = useStreamBinding(stream, env)
@@ -190,19 +193,6 @@ export function PreJoin() {
     const verdict = classifyByLabel(d.label, natives).verdict
     const suffix = verdict === 'blocked' ? ' — virtual device' : verdict === 'review' ? ' — needs review' : ''
     return `${normalizeLabel(d.label) || 'Unnamed device'}${suffix}`
-  }
-
-  if (joined) {
-    return (
-      <div className="app app--ended">
-        <TitleBar title={`Knock · Interview with ${INTERVIEWER_NAME}`} />
-        <div className="left-call">
-          <CircleCheck size={28} aria-hidden />
-          <h1>You're in</h1>
-          <p className="muted">{INTERVIEWER_NAME} will start the interview shortly.</p>
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -315,7 +305,7 @@ export function PreJoin() {
             type="button"
             className="button button--accent button--block"
             disabled={blocking || !selectedCamera}
-            onClick={() => setJoined(true)}
+            onClick={() => selectedCamera && onJoin({ cameraId: selectedCamera.deviceId, micId: selectedMic?.deviceId ?? null })}
           >
             Join interview
           </button>

@@ -5,7 +5,22 @@ import type { ChallengeKind, CheckStatus, EnvironmentEvidence } from '@knock/sha
  * @knock/shared; everything here is what the interviewer screen needs on top.
  */
 
-export type CheckRowStatus = 'waiting' | 'running' | CheckStatus
+/**
+ * @knock/shared CheckStatus plus 'review': a signal worth a human look that must
+ * not veto on its own (e.g. suspected synthetic voice while false positives are
+ * unmeasured). TODO(shared): the shared schema has no 'review' status yet.
+ */
+export type CheckOutcome = CheckStatus | 'review'
+
+export interface CheckOutcomeResult {
+  kind: ChallengeKind
+  status: CheckOutcome
+  /** Model score; only ever shown in the report modal. */
+  score: number
+  reasons: string[]
+}
+
+export type CheckRowStatus = 'waiting' | 'running' | CheckOutcome
 
 export interface CheckRow {
   kind: ChallengeKind
@@ -40,6 +55,7 @@ export type OverallVerdict =
   | { status: 'checking' }
   | { status: 'verified'; verifiedAt: number; expiresAt: number }
   | { status: 'not_verified'; at: number; failing: ChallengeKind[]; reason: string }
+  | { status: 'needs_review'; at: number; reviewing: ChallengeKind[]; reason: string }
   | { status: 'unable'; at: number; cause: UnableCause; reason: string }
 
 export interface TrustToken {
@@ -83,6 +99,43 @@ export interface KnockState {
   /** Newest first. */
   activity: ActivityEntry[]
   alert: KnockAlert | null
+  /** Challenge the participant's screen should run now, if any. */
+  challenge: ChallengeRequest | null
+  /** What the last challenge reported back (steps and audio metadata). */
+  lastCapture: ChallengeCapture | null
+}
+
+/** A challenge to run on the participant's own screen. */
+export interface ChallengeRequest {
+  id: string
+  /** Saturated colors flashed full-window, in order. Upcoming ones are never shown. */
+  colors: string[]
+  stepMs: number
+  /** 10–14 words: the voice model needs at least ~4 s of speech. */
+  phrase: string
+  sonar: boolean
+  requestedBy: string
+}
+
+export interface StepMark {
+  index: number
+  color: string
+  /** performance.now() of the first frame showing this color. */
+  at: number
+}
+
+export interface ChallengeAudioMeta {
+  /** performance.now() clock, same as StepMark.at. */
+  startedAt: number
+  endedAt: number
+  sampleRate: number
+}
+
+export interface ChallengeCapture {
+  challengeId: string
+  steps: StepMark[]
+  audio: (ChallengeAudioMeta & { bytes: number; type: string }) | null
+  completedAt: number | null
 }
 
 export interface DeviceChange {
@@ -108,4 +161,10 @@ export interface KnockClient {
   requestCheck(): void
   getState(): KnockState
   reportEnvironment(report: EnvironmentReport): void
+  /** Called once per color step so light analysis can align the schedule with video frames. */
+  onStep(index: number, color: string, at: number): void
+  /** Microphone audio for the whole reading window, for the voice check. */
+  onChallengeAudio(audio: Blob, meta: ChallengeAudioMeta): void
+  /** The challenge screen finished (or was abandoned) and closed. */
+  endChallenge(id: string): void
 }

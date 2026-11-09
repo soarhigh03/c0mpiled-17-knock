@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useSyncExternalStore } from 'react'
+import { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from 'react'
 import type { KnockClient, KnockState } from './types.ts'
 
 /** One KnockClient per call participant, keyed by participant id. */
@@ -30,6 +30,12 @@ function combine(clients: KnockClients) {
       return value
     },
   }
+}
+
+export function useKnockState(client: KnockClient): KnockState {
+  const subscribe = useCallback((onChange: () => void) => client.subscribe(onChange), [client])
+  const getSnapshot = useCallback(() => client.getState(), [client])
+  return useSyncExternalStore(subscribe, getSnapshot)
 }
 
 export function useKnockStates(clients: KnockClients): Record<string, KnockState> {

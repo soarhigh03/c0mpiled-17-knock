@@ -110,6 +110,24 @@ export function StatusCard({ verdict, progress, now }: StatusCardProps) {
         </section>
       )
 
+    case 'needs_review':
+      return (
+        <section className="status-card status-card--review" role="status">
+          <div className="status-card__head">
+            <ShieldQuestionMark size={20} aria-hidden />
+            <h2>Needs review</h2>
+          </div>
+          <p>
+            <strong>{verdict.reviewing.map((k) => CHECK_LABEL[k]).join(', ')}:</strong> {verdict.reason.toLowerCase()}.
+            Other checks passed.
+          </p>
+          <div className="recommend recommend--review">
+            <div className="recommend__label">Recommended</div>
+            <p>Verify another way before acting on sensitive requests.</p>
+          </div>
+        </section>
+      )
+
     case 'unable':
       return (
         <section className="status-card status-card--unable">

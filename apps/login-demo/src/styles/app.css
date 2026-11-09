@@ -856,6 +856,13 @@ a:focus-visible {
 .status-card--fail .status-card__head {
   color: var(--fail-text);
 }
+.status-card--review {
+  background: color-mix(in srgb, var(--review) 11%, var(--panel));
+  border-color: color-mix(in srgb, var(--review) 45%, transparent);
+}
+.status-card--review .status-card__head {
+  color: var(--review-text);
+}
 .status-card--unable .status-card__head svg {
   color: var(--review-text);
 }
@@ -942,6 +949,12 @@ a:focus-visible {
   color: var(--fail-text);
   margin-bottom: 3px;
 }
+.recommend--review {
+  border-color: color-mix(in srgb, var(--review) 35%, transparent);
+}
+.recommend--review .recommend__label {
+  color: var(--review-text);
+}
 .recommend p {
   color: var(--text);
 }
@@ -1014,6 +1027,10 @@ a:focus-visible {
 .check-row--fail {
   background: color-mix(in srgb, var(--fail) 12%, var(--row));
   border-color: color-mix(in srgb, var(--fail) 60%, transparent);
+}
+.check-row--review {
+  background: color-mix(in srgb, var(--review) 10%, var(--row));
+  border-color: color-mix(in srgb, var(--review) 55%, transparent);
 }
 .check-row__icon {
   display: grid;
@@ -1330,6 +1347,167 @@ a:focus-visible {
 .button--block {
   width: 100%;
   height: 40px;
+}
+
+/* ---------- candidate call ---------- */
+
+.candidate-call {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  min-height: 0;
+}
+.candidate-call__remote {
+  flex: 1;
+}
+.candidate-call__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 52px;
+  padding: 0 8px;
+  flex: none;
+}
+.candidate-call__bar .end-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.self-pip {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2;
+  width: 220px;
+  height: 138px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--row);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+.pip__off {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--text-muted);
+}
+.self-pip__label {
+  position: absolute;
+  left: 8px;
+  bottom: 6px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: var(--overlay);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* ---------- challenge (full-window color) ---------- */
+
+.challenge {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  /* Saturated challenge color; must settle within 150 ms of each step. */
+  transition: background-color 120ms linear;
+}
+.challenge__center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: min(860px, 100%);
+}
+.challenge__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.challenge__chip--quiet {
+  height: 26px;
+  font-size: 12px;
+  font-weight: 500;
+  background: rgba(0, 0, 0, 0.45);
+}
+.challenge__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+  padding: 28px 36px 24px;
+  border-radius: 22px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  text-align: center;
+}
+.challenge__prompt {
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.82);
+}
+.challenge__phrase {
+  margin: 0;
+  max-width: 100%;
+  font-size: 32px;
+  line-height: 1.25;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+  /* Two lines at most. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.challenge__steps {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.step {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex: none;
+}
+.step--done {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+.step--current {
+  width: 20px;
+  height: 20px;
+  box-shadow: 0 0 0 3px #fff;
+}
+.step--upcoming {
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.55);
+}
+.challenge__meta {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.82);
+}
+.challenge__status {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
 }
 
 /* ---------- other pages ---------- */

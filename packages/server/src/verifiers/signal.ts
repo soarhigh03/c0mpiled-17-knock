@@ -156,6 +156,109 @@ function dot(a: number[], b: number[], from: number, to: number, lag: number): n
   return Math.min(1, Math.max(-1, sum / (to - from)))
 }
 
+export function mean(xs: number[]): number {
+  return xs.length === 0 ? Number.NaN : xs.reduce((s, x) => s + x, 0) / xs.length
+}
+
+export function median(xs: number[]): number {
+  if (xs.length === 0) return Number.NaN
+  const sorted = [...xs].sort((a, b) => a - b)
+  const mid = sorted.length >> 1
+  return sorted.length % 2 === 1 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2
+}
+
+/** Effective sample rate of a series, Hz. */
+export function rateHz(series: { t: number }[]): number {
+  if (series.length < 2) return 0
+  const span = lastT(series) - firstT(series)
+  return span > 0 ? ((series.length - 1) * 1000) / span : 0
+}
+
+// Reduced rather than spread: these series come from the client, and
+// Math.min(...huge) overflows the stack.
+export function firstT(series: { t: number }[]): number {
+  return series.reduce((min, s) => Math.min(min, s.t), Infinity)
+}
+
+export function lastT(series: { t: number }[]): number {
+  return series.reduce((max, s) => Math.max(max, s.t), -Infinity)
+}
+
+/** For the `reasons` strings: a measurement we could not make says so. */
+export function fmt(x: number, digits = 2): string {
+  return Number.isFinite(x) ? x.toFixed(digits) : 'n/a'
+}
+
+export interface ChannelPair {
+  /** Expected series, already standardised. */
+  a: number[]
+  /** Measured series, already standardised. */
+  b: number[]
+}
+
+/**
+ * Peak of the *mean* cross-correlation over several series that must agree on
+ * one lag.
+ *
+ * The light check correlates the red, green and blue responses against their
+ * own templates, and one flash through one camera has one delay — so the lag
+ * is shared and only the average over channels is maximised. Scoring them
+ * jointly is also what makes the statistic chromatic: a plain change in room
+ * brightness correlates with the red template of a red pulse, but it also puts
+ * a response in green and blue where the template predicts none, and those two
+ * drag the mean back down.
+ */
+export function peakChannelCorrelation(
+  pairs: ChannelPair[],
+  minLag: number,
+  maxLag: number,
+): LaggedCorrelation {
+  let best: LaggedCorrelation = { r: 0, lagSamples: 0 }
+  for (let lag = minLag; lag <= maxLag; lag++) {
+    let sum = 0
+    let used = 0
+    for (const { a, b } of pairs) {
+      const from = Math.max(0, -lag)
+      const to = Math.min(a.length, b.length - lag)
+      if (to - from < 2) continue
+      sum += dot(a, b, from, to, lag)
+      used++
+    }
+    if (used === 0) continue
+    const r = sum / used
+    if (r > best.r) best = { r, lagSamples: lag }
+  }
+  return best
+}
+
+/** `chanceCorrelation`, for the multi-channel statistic. */
+export function chanceChannelCorrelation(
+  pairs: ChannelPair[],
+  minLag: number,
+  maxLag: number,
+): number {
+  if (pairs.length === 0) return 0
+  const n = pairs.reduce((min, p) => Math.min(min, p.b.length), Infinity)
+  const guard = Math.abs(minLag) + Math.abs(maxLag) + 1
+  const peaks: number[] = []
+  for (let k = 1; k <= ROTATIONS; k++) {
+    const shift = Math.round((k * n) / (ROTATIONS + 1))
+    if (shift < guard || n - shift < guard) continue
+    // Every channel rotates by the same amount. Rotating them independently
+    // would destroy the structure *between* the channels too, and that
+    // structure is the whole reason this statistic can tell a colored
+    // reflection from a change in overall brightness.
+    peaks.push(
+      peakChannelCorrelation(
+        pairs.map(({ a, b }) => ({ a, b: [...b.slice(shift), ...b.slice(0, shift)] })),
+        minLag,
+        maxLag,
+      ).r,
+    )
+  }
+  return peaks.length > 0 ? peaks.reduce((s, x) => s + x, 0) / peaks.length : 0
+}
+
 /** `chanceCorrelation`, for the partial statistic. */
 export function chancePartialCorrelation(
   signal: number[],

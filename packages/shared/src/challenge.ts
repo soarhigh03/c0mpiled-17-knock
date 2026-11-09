@@ -7,13 +7,48 @@ import { z } from 'zod'
 export const ChallengeKind = z.enum(['environment', 'light', 'sonar', 'voice'])
 export type ChallengeKind = z.infer<typeof ChallengeKind>
 
-/** Screen flash sequence; the face's reflected color must follow it. */
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/
+
+/** One burst from the panels. They are dark (`#000000`) at every other moment. */
+export const LightPulse = z.object({
+  /** ms from the start of the run at which the panels light up. */
+  atMs: z.number().int().nonnegative(),
+  /** How long they stay lit. */
+  holdMs: z.number().int().positive(),
+  /** Panel color while lit. */
+  color: z.string().regex(HEX_COLOR),
+})
+export type LightPulse = z.infer<typeof LightPulse>
+
+/**
+ * Light panels along the border of the call window flash intermittently; the
+ * light reflected off the face has to follow them.
+ *
+ * **A border ring, not the full screen.** The check has to run *during* an
+ * interview, and a product cannot blank the call to a strobing full-screen
+ * color. The ring is worth roughly a quarter of the screen's flux, so the
+ * reflected modulation is a few percent of the face's level rather than
+ * obvious — which is why the verifier spends that budget on a lag-searched,
+ * chance-referenced correlation instead of a brightness threshold.
+ *
+ * **Intermittent, not a continuous sweep.** The dark gaps are the baseline:
+ * every pulse is scored against the dark frames either side of it, so "the
+ * face got brighter" is measured against this room at this instant instead of
+ * an assumed ambient level. Sonar needed the same correction for its carrier
+ * SNR (docs/sonar.md §4.1).
+ *
+ * **Jittered onsets.** Unpredictable timing is half the replay defence — the
+ * colors are the other half — and an aperiodic stimulus is also what keeps the
+ * chance correlation low, the trap sonar fell into with a rhythmic prompt
+ * (docs/sonar.md §4.3). It keeps the flash rate near 1 Hz as well, well under
+ * the 3 Hz where flashing becomes a seizure risk.
+ */
 export const LightChallenge = z.object({
   kind: z.literal('light'),
-  /** Hex colors shown full-screen, in order. */
-  sequence: z.array(z.string().regex(/^#[0-9a-fA-F]{6}$/)).min(4),
-  /** Duration of each color frame in ms. */
-  frameMs: z.number().int().positive(),
+  /** In onset order, non-overlapping. */
+  pulses: z.array(LightPulse).min(3),
+  /** Total run length, covering every pulse and the dark gap after the last. */
+  durationMs: z.number().int().positive(),
 })
 export type LightChallenge = z.infer<typeof LightChallenge>
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createKnock, type CheckResult, type Verdict } from '@knock/sdk'
+import { LightLab } from './LightLab.tsx'
 import { SonarLab } from './SonarLab.tsx'
 import './App.css'
 
@@ -79,6 +80,7 @@ function App() {
           최종: <b>{verdict.human ? 'HUMAN' : 'NOT VERIFIED'}</b> (score {verdict.score.toFixed(2)})
         </p>
       )}
+      <LightLab stream={stream} />
       <SonarLab stream={stream} />
     </main>
   )

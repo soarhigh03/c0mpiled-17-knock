@@ -1,4 +1,7 @@
-/** Spectrum and timing helpers shared by the sonar probe and the sweep. */
+/**
+ * Spectrum helpers for the sonar probe and the sweep, plus `wait`, which every
+ * check's run loop needs.
+ */
 
 /** 48 kHz / 8192 ≈ 5.9 Hz bins: fine enough to resolve a pure tone. */
 export const FFT_SIZE = 8192

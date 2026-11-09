@@ -1,8 +1,12 @@
 import type { CheckResult, SonarChallenge, SonarEvidence } from '@knock/shared'
 import {
   chancePartialCorrelation,
+  firstT,
+  fmt,
   grid,
+  lastT,
   peakPartialCorrelation,
+  rateHz,
   resample,
   standardise,
   variationCoefficient,
@@ -215,23 +219,6 @@ function headSpeedOn(
     )
 }
 
-/** Effective sample rate of a series, Hz. */
-function rateHz(series: { t: number }[]): number {
-  if (series.length < 2) return 0
-  const span = lastT(series) - firstT(series)
-  return span > 0 ? ((series.length - 1) * 1000) / span : 0
-}
-
-// Reduced rather than spread: these series come from the client, and
-// Math.min(...huge) overflows the stack.
-function firstT(series: { t: number }[]): number {
-  return series.reduce((min, s) => Math.min(min, s.t), Infinity)
-}
-
-function lastT(series: { t: number }[]): number {
-  return series.reduce((max, s) => Math.max(max, s.t), -Infinity)
-}
-
 /** Peak-to-peak range of a series. */
 function extent(xs: number[]): number {
   let min = Infinity
@@ -241,8 +228,4 @@ function extent(xs: number[]): number {
     if (x > max) max = x
   }
   return max - min
-}
-
-function fmt(x: number, digits = 2): string {
-  return Number.isFinite(x) ? x.toFixed(digits) : 'n/a'
 }

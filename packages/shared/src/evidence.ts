@@ -16,12 +16,65 @@ export const EnvironmentEvidence = z.object({
 })
 export type EnvironmentEvidence = z.infer<typeof EnvironmentEvidence>
 
+/** Mean camera levels (0–255) over one region of one frame. */
+export const LightRoi = z.object({
+  r: z.number(),
+  g: z.number(),
+  b: z.number(),
+  /**
+   * Fraction of the region's pixels at the top of the range. A clipped region
+   * cannot get any brighter, so a flash measured there means nothing.
+   */
+  clipped: z.number().min(0).max(1),
+})
+export type LightRoi = z.infer<typeof LightRoi>
+
 export const LightEvidence = z.object({
   kind: z.literal('light'),
-  /** Mean RGB of the face skin ROI per sampled video frame. */
-  samples: z.array(
-    z.object({ t: z.number(), r: z.number(), g: z.number(), b: z.number() }),
-  ),
+  /**
+   * One entry per sampled video frame. `face` is skin — forehead and both
+   * cheeks; `surround` is the band just outside the head: wall, hair,
+   * shoulders.
+   *
+   * The two share a timestamp on purpose. A real-time face swap leaves the
+   * surroundings alone, so the scene reflects the panels while the generated
+   * face does not. Reading both regions off the same frame is what makes that
+   * comparison trustworthy — same exposure, same white balance, same instant.
+   */
+  frames: z
+    .array(z.object({ t: z.number(), face: LightRoi, surround: LightRoi }))
+    .max(3_000),
+  /**
+   * Receipt of what the panels showed and when, on the same clock as
+   * `frames.t` and zeroed at the start of the run.
+   *
+   * The verifier builds its template from the *challenge*, never from this. A
+   * client that supplied the template could go looking for onset times that
+   * happen to fit a replayed video's own flicker; all this is used for is
+   * confirming the issued schedule was actually rendered, and recovering the
+   * one constant offset between the client's clock and the schedule.
+   */
+  emissions: z
+    .array(z.object({ t: z.number(), color: z.string().regex(/^#[0-9a-fA-F]{6}$/) }))
+    .max(200),
+  /**
+   * Which clock timed the frames. `callback` means `captureTime` was
+   * unavailable, so every timestamp carries the camera pipeline delay and the
+   * verifier has to widen its lag search — see docs/sonar.md §4.4, where the
+   * same substitution made the echo appear to lead the lips.
+   */
+  videoClock: z.enum(['captureTime', 'callback']),
+  /**
+   * Camera modes as *reported*. The stream belongs to the call, so the SDK
+   * reads these and changes nothing: reconfiguring exposure mid-interview to
+   * suit a check is not a trade a call can make. Continuous exposure and white
+   * balance work against the measurement by compensating the flash away, which
+   * shows up as a squashed response — worth being able to tell apart from a
+   * spoof afterwards.
+   */
+  cameraModes: z
+    .object({ exposure: z.string().nullable(), whiteBalance: z.string().nullable() })
+    .optional(),
 })
 export type LightEvidence = z.infer<typeof LightEvidence>
 

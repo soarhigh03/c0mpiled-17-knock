@@ -8,7 +8,15 @@ export {
   type SonarProbeOptions,
   type SonarSignals,
 } from './challenges/sonar.ts'
-export type { FaceModelOptions, MouthSample } from './challenges/mouth.ts'
+/** Raw light probe, for hardware bring-up. The verdict still comes from the server. */
+export {
+  probeLight,
+  type LightFrame,
+  type LightProbeOptions,
+  type LightSignals,
+} from './challenges/light.ts'
+export type { FaceModelOptions, VideoClock } from './challenges/face.ts'
+export type { MouthSample } from './challenges/mouth.ts'
 export {
   sweepCarrierResponse,
   type SweepOptions,
@@ -18,6 +26,7 @@ export {
 export type {
   ChallengeKind,
   CheckResult,
+  LightPulse,
   Verdict,
   VerifyResponse,
 } from '@knock/shared'

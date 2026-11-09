@@ -177,6 +177,16 @@ export interface KnockClient {
   reportEnvironment(report: EnvironmentReport): void
   /** The call's own camera + mic; the SDK never opens its own camera. */
   attachMedia(stream: MediaStream | null): void
+  /**
+   * The call surface the `light` check hangs its panel ring on.
+   *
+   * Without this the ring falls back to the whole window, which would paint
+   * over the title bar and the macOS traffic lights. Passing the call element
+   * puts the panels on the edge of the video call itself — which is where they
+   * belong, both because that is the surface the candidate is looking at and
+   * because the ring then reads as part of the call rather than as chrome.
+   */
+  attachPanelHost(element: HTMLElement | null): void
   /** Called once per color step so light analysis can align the schedule with video frames. */
   onStep(index: number, color: string, at: number): void
   /** Microphone audio for the whole reading window, for the voice check. */

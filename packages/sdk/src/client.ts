@@ -15,6 +15,12 @@ export interface RunContext {
   stream: MediaStream
   /** A <video> element playing `stream` (used for frame sampling). */
   video: HTMLVideoElement
+  /**
+   * Where `light` hangs its panel ring. Defaults to the whole window, which in
+   * a desktop shell is the app frame; a host that wants the ring around one
+   * call surface instead passes that element (it has to be positioned).
+   */
+  panelHost?: HTMLElement
   /** Called as each check finishes, for live UI. */
   onResult?: (result: CheckResult) => void
   /**

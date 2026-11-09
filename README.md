@@ -212,27 +212,6 @@ npm test
 > Chrome 권장. Safari는 `requestVideoFrameCallback`이 없어 sonar가 `inconclusive`가 됩니다.
 > sonar는 **스피커로 소리가 나야** 합니다 — 이어폰을 꽂으면 스피커→방→마이크 경로가 사라집니다.
 
----
-
-## 상태와 남은 일
-
-**구현 완료** — `sonar`, `light`, `environment`. 서버 판정 → 신뢰 토큰 발급 → introspect까지
-end-to-end로 동작합니다. 서버 검증기 테스트 18개, 데모 앱 테스트 24개.
-
-**미구현** — 데모 시나리오에는 들어가지만 코드에는 아직 없습니다.
-
-- [ ] `cover`: 가리기 과제 — 얼굴·손·경계 일관성 판정
-- [ ] `voice`: AASIST/RawNet2 사이드카 (지금은 SDK가 빈 오디오를 보내고 서버 검증기도 비어 있음)
-
-**다음**
-
-- [ ] **임계값 확정 (최우선)** — sonar의 `echo variation`, light의 `MIN_DEPTH`. 둘 다
-      시뮬레이션 기반 잠정값입니다 → [docs/sonar.md](docs/sonar.md#7-남은-일),
-      [docs/light.md](docs/light.md#6-임계값--전부-잠정값)
-- [ ] light: 목 영역을 세 번째 ROI로 (피부라 깊이가 비교 가능, 얼굴 전용 모델은 안 건드림)
-- [ ] light: 스트립을 따로 켜서 얼굴 좌/우 음영 기울기 비교 (모델이 재현하기 더 어려움)
-- [ ] meet: WebRTC 통화 연결, 초음파 성분 송출 오디오에서 필터링
-- [ ] 공격 데모 시나리오: OBS 가상캠 → 영상 재생 → 실시간 페이스스왑
 
 ---
 

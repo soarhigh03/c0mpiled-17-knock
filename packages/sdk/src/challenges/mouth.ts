@@ -68,6 +68,7 @@ export async function createMouthTracker(
   const useFrameCallback = typeof video.requestVideoFrameCallback === 'function'
   let running = false
   let lastTimestamp = 0
+  let clockReported = false
 
   return {
     track(t0, onSample) {
@@ -90,13 +91,21 @@ export async function createMouthTracker(
       const schedule = () => {
         if (!running) return
         if (useFrameCallback) {
-          video.requestVideoFrameCallback((now, metadata) =>
+          video.requestVideoFrameCallback((now, metadata) => {
             // `now` is when the callback ran, which is a camera pipeline later
             // than the moment the frame depicts — easily 100–200 ms. Timing the
             // series by it makes every mouth movement look late, so the audio
-            // appears to lead the lips. `captureTime` is the real instant.
-            sample(metadata.captureTime ?? now, now, metadata.mediaTime),
-          )
+            // appears to lead the lips. `captureTime` is the real instant, but
+            // browsers only populate it for some sources, and the fallback
+            // silently reintroduces that whole offset — so say which one we got.
+            if (!clockReported) {
+              clockReported = true
+              console.info(
+                `[knock] video clock: ${metadata.captureTime == null ? 'callback (captureTime unavailable — expect a negative lag)' : 'captureTime'}`,
+              )
+            }
+            sample(metadata.captureTime ?? now, now, metadata.mediaTime)
+          })
         } else {
           requestAnimationFrame((now) => sample(now, now))
         }

@@ -33,7 +33,14 @@ const MAX_RUN_MS = 5 * 60_000
 const AUDIBLE_FROM_HZ = 14_000
 const AUDIBLE_TO_HZ = 17_000
 const GRID_HZ = 20
-const MAX_LAG_MS = 300
+/**
+ * Much wider than the verifier's ±300 ms on purpose. Runs kept peaking at the
+ * old boundary, which means the true offset between the audio and video clocks
+ * is larger than that — and a peak pinned to the edge of a search is not a
+ * measurement, it is a clipped one. Widen here first, find where the offset
+ * actually sits, then narrow the server around it.
+ */
+const MAX_LAG_MS = 1_000
 
 const DOPPLER_COLOR = '#38bdf8'
 const MOUTH_COLOR = '#f472b6'

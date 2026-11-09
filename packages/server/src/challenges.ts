@@ -19,17 +19,10 @@ export function issueChallenge(kind: ChallengeKind): Challenge {
         sequence: Array.from({ length: 8 }, () => LIGHT_PALETTE[randomInt(LIGHT_PALETTE.length)]!),
         frameMs: 400,
       }
-    case 'sonar': {
-      const slotMs = 250
-      const durationMs = 6_000
-      return {
-        kind,
-        carriersHz: [18_500 + randomInt(0, 2_000)],
-        pattern: Array.from({ length: durationMs / slotMs }, () => (randomInt(2) as 0 | 1)),
-        slotMs,
-        durationMs,
-      }
-    }
+    case 'sonar':
+      // 18–20 kHz: above the speech band, below where laptop speakers die out.
+      // The frequency is the replay defence — see SonarChallenge.
+      return { kind, carrierHz: 18_000 + randomInt(0, 2_001), durationMs: 8_000 }
     case 'voice':
       return { kind, phrase: PHRASES[randomInt(PHRASES.length)]! }
   }

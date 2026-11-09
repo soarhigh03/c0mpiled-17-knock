@@ -17,14 +17,20 @@ export const LightChallenge = z.object({
 })
 export type LightChallenge = z.infer<typeof LightChallenge>
 
-/** Near-ultrasonic probe; mouth-motion Doppler must match video lip motion. */
+/**
+ * Near-ultrasonic probe; mouth-motion Doppler must match video lip motion.
+ *
+ * The carrier is a continuous tone, deliberately *not* on/off keyed: the
+ * receiver removes the DC (direct path + static reflection) component of the
+ * baseband, and gating the carrier would inject step transients far larger
+ * than the mouth Doppler we are looking for. Replay resistance comes from the
+ * per-session carrier frequency instead — a recording made at another
+ * frequency demodulates to noise.
+ */
 export const SonarChallenge = z.object({
   kind: z.literal('sonar'),
-  /** Carrier frequencies in Hz (e.g. 18_000–21_000). */
-  carriersHz: z.array(z.number().positive()).min(1),
-  /** Randomised on/off keying pattern so a replay can't anticipate it. */
-  pattern: z.array(z.union([z.literal(0), z.literal(1)])),
-  slotMs: z.number().int().positive(),
+  /** Carrier in Hz, freshly drawn per session (near-ultrasonic, 17–22 kHz). */
+  carrierHz: z.number().min(17_000).max(22_000),
   durationMs: z.number().int().positive(),
 })
 export type SonarChallenge = z.infer<typeof SonarChallenge>

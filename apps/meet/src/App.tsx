@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createKnock, type CheckResult, type Verdict } from '@knock/sdk'
+import { SonarLab } from './SonarLab.tsx'
 import './App.css'
 
 const knock = createKnock({
@@ -11,6 +12,7 @@ function App() {
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [results, setResults] = useState<CheckResult[]>([])
   const [verdict, setVerdict] = useState<Verdict | null>(null)
+  const [prompt, setPrompt] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -23,7 +25,8 @@ function App() {
   }
 
   async function runVerification() {
-    if (!stream || !videoRef.current) return
+    const video = videoRef.current
+    if (!stream || !video) return
     setRunning(true)
     setResults([])
     setVerdict(null)
@@ -32,13 +35,15 @@ function App() {
       await document.documentElement.requestFullscreen().catch(() => {})
       const res = await knock.verify(['environment', 'light', 'sonar'], {
         stream,
-        video: videoRef.current,
+        video,
         onResult: (r) => setResults((prev) => [...prev, r]),
+        onPrompt: setPrompt,
       })
       setVerdict(res.verdict)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
+      setPrompt(null)
       setRunning(false)
     }
   }
@@ -53,6 +58,14 @@ function App() {
           {running ? '검증 중…' : '사람 검증 시작'}
         </button>
       </div>
+      {prompt && (
+        <p
+          role="status"
+          style={{ padding: 12, borderRadius: 8, background: '#1d4ed8', color: '#fff', fontSize: 18 }}
+        >
+          {prompt}
+        </p>
+      )}
       {error && <p style={{ color: 'crimson' }}>{error}</p>}
       <ul>
         {results.map((r) => (
@@ -66,6 +79,7 @@ function App() {
           최종: <b>{verdict.human ? 'HUMAN' : 'NOT VERIFIED'}</b> (score {verdict.score.toFixed(2)})
         </p>
       )}
+      <SonarLab stream={stream} />
     </main>
   )
 }

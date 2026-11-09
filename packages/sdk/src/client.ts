@@ -17,6 +17,12 @@ export interface RunContext {
   video: HTMLVideoElement
   /** Called as each check finishes, for live UI. */
   onResult?: (result: CheckResult) => void
+  /**
+   * What the user has to do right now, e.g. "count from 1 to 10 out loud".
+   * Checks that need the user's cooperation set this; `null` clears it.
+   * The host app is responsible for actually showing it.
+   */
+  onPrompt?: (prompt: string | null) => void
 }
 
 export interface KnockClient {

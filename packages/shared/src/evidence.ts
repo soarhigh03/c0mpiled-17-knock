@@ -25,13 +25,23 @@ export const LightEvidence = z.object({
 })
 export type LightEvidence = z.infer<typeof LightEvidence>
 
+/**
+ * Both series carry `t` in ms from the start of the probe window, on one clock:
+ * audio frame indices are mapped onto `performance.now()` via
+ * `AudioContext.getOutputTimestamp()`, video frames are timed by
+ * `requestVideoFrameCallback`. The verifier relies on that shared timebase.
+ */
 export const SonarEvidence = z.object({
   kind: z.literal('sonar'),
-  /** Doppler energy around the carrier per time slot. */
-  doppler: z.array(z.object({ t: z.number(), energy: z.number() })),
-  /** Mouth aperture from face landmarks (e.g. MediaPipe) over the same window. */
-  mouthAperture: z.array(z.object({ t: z.number(), value: z.number() })),
+  // Caps are generous for the issued windows (100 Hz and ~60 fps) but keep a
+  // hostile client from handing the verifier an unbounded series.
+  /** Movement energy: RMS of the DC-removed quadrature baseband per frame. */
+  doppler: z.array(z.object({ t: z.number(), energy: z.number().nonnegative() })).max(6_000),
+  /** Mouth aperture from face landmarks (e.g. MediaPipe), over face height. */
+  mouthAperture: z.array(z.object({ t: z.number(), value: z.number() })).max(3_000),
   sampleRate: z.number().positive(),
+  /** Carrier peak over the nearby noise floor, dB. Low ⇒ the probe never arrived. */
+  carrierSnrDb: z.number(),
 })
 export type SonarEvidence = z.infer<typeof SonarEvidence>
 

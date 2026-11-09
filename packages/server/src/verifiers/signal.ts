@@ -113,3 +113,65 @@ export function chanceCorrelation(
   }
   return peaks.length > 0 ? peaks.reduce((s, x) => s + x, 0) / peaks.length : 0
 }
+
+/**
+ * Peak partial correlation of `signal` with `target`, holding `control` fixed.
+ *
+ * The echo is one mixed number per frame, so a nodding head and a speaking
+ * mouth both land in it and a plain correlation cannot say which one it saw.
+ * Video can tell them apart, so the head's motion comes in as a control: this
+ * asks whether the lips explain anything the head does not already account
+ * for. `control` shares the video clock with `signal`, so only `target` is
+ * lagged.
+ */
+export function peakPartialCorrelation(
+  signal: number[],
+  target: number[],
+  control: number[],
+  minLag: number,
+  maxLag: number,
+): LaggedCorrelation {
+  let best: LaggedCorrelation = { r: 0, lagSamples: 0 }
+  for (let lag = minLag; lag <= maxLag; lag++) {
+    const from = Math.max(0, -lag)
+    const to = Math.min(signal.length, control.length, target.length - lag)
+    if (to - from < 2) continue
+    const st = dot(signal, target, from, to, lag)
+    const sc = dot(signal, control, from, to, 0)
+    const ct = dot(control, target, from, to, lag)
+    const denom = Math.sqrt((1 - sc * sc) * (1 - ct * ct))
+    // Head motion that already explains the mouth (or the echo) completely
+    // leaves nothing to attribute; report no evidence rather than divide by ~0.
+    if (!(denom > 1e-3)) continue
+    const r = Math.min(1, Math.max(-1, (st - sc * ct) / denom))
+    if (r > best.r) best = { r, lagSamples: lag }
+  }
+  return best
+}
+
+/** Mean product over an overlap; the inputs are already standardised. */
+function dot(a: number[], b: number[], from: number, to: number, lag: number): number {
+  let sum = 0
+  for (let i = from; i < to; i++) sum += a[i]! * b[i + lag]!
+  return Math.min(1, Math.max(-1, sum / (to - from)))
+}
+
+/** `chanceCorrelation`, for the partial statistic. */
+export function chancePartialCorrelation(
+  signal: number[],
+  target: number[],
+  control: number[],
+  minLag: number,
+  maxLag: number,
+): number {
+  const n = target.length
+  const guard = Math.abs(minLag) + Math.abs(maxLag) + 1
+  const peaks: number[] = []
+  for (let k = 1; k <= ROTATIONS; k++) {
+    const shift = Math.round((k * n) / (ROTATIONS + 1))
+    if (shift < guard || n - shift < guard) continue
+    const rotated = [...target.slice(shift), ...target.slice(0, shift)]
+    peaks.push(peakPartialCorrelation(signal, rotated, control, minLag, maxLag).r)
+  }
+  return peaks.length > 0 ? peaks.reduce((s, x) => s + x, 0) / peaks.length : 0
+}

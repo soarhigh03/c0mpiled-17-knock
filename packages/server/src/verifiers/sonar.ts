@@ -1,8 +1,8 @@
 import type { CheckResult, SonarChallenge, SonarEvidence } from '@knock/shared'
 import {
-  chanceCorrelation,
+  chancePartialCorrelation,
   grid,
-  peakCrossCorrelation,
+  peakPartialCorrelation,
   resample,
   standardise,
   variationCoefficient,
@@ -124,16 +124,25 @@ export function verifySonar(challenge: SonarChallenge, ev: SonarEvidence): Check
   const variation = variationCoefficient(echo)
   measured.push(`echo variation ${fmt(variation, 3)}`)
 
+  // Head motion from the same frames, as a control. Nodding and leaning put
+  // far more energy into the echo than lips do, and the microphone cannot
+  // separate them — but the camera can, so the question becomes whether the
+  // lips explain anything the head does not already account for.
+  const headSpeed = headSpeedOn(ev.head, times)
+  measured.push(headSpeed ? `head motion controlled` : `no head series (uncontrolled)`)
+
   const a = standardise(mouthSpeed)
   const b = standardise(echo)
+  const c = headSpeed ? standardise(headSpeed) : null
+  const control = c ?? new Array<number>(mouthSpeed.length).fill(0)
   const minLag = Math.round((MIN_LAG_MS * GRID_HZ) / 1000)
   const maxLag = Math.round((MAX_LAG_MS * GRID_HZ) / 1000)
-  const peak = a && b ? peakCrossCorrelation(a, b, minLag, maxLag) : null
+  const peak = a && b ? peakPartialCorrelation(a, b, control, minLag, maxLag) : null
   // Raw r is not comparable across runs: searching a range of lags and keeping
   // the best inflates it, and spiky echo series inflate it further. What
   // matters is how far the peak rises above what the same search finds on the
   // same data with its alignment destroyed.
-  const chance = a && b ? chanceCorrelation(a, b, minLag, maxLag) : 0
+  const chance = a && b ? chancePartialCorrelation(a, b, control, minLag, maxLag) : 0
   const excess = peak ? peak.r - chance : 0
   if (peak) {
     const lagMs = Math.round((peak.lagSamples * 1000) / GRID_HZ)
@@ -169,6 +178,26 @@ export function verifySonar(challenge: SonarChallenge, ev: SonarEvidence): Check
     return verdict('fail', 0.1, ['echo is static while the video shows a moving mouth'])
   }
   return verdict('fail', scoreFor(excess), ['movement does not match the lips'])
+}
+
+/**
+ * Head speed on the analysis grid: how fast the head is moving toward the mic
+ * and across the frame. Scale changes dominate — that is radial motion, the
+ * component that actually shifts the echo.
+ */
+function headSpeedOn(
+  head: SonarEvidence['head'],
+  times: number[],
+): number[] | null {
+  if (head.length < MIN_MOUTH_FRAMES) return null
+  const scale = resample(head.map((h): Sample => ({ t: h.t, v: h.scale })), times)
+  const x = resample(head.map((h): Sample => ({ t: h.t, v: h.x })), times)
+  const y = resample(head.map((h): Sample => ({ t: h.t, v: h.y })), times)
+  return scale
+    .slice(1)
+    .map((_, i) =>
+      Math.hypot(scale[i + 1]! - scale[i]!, x[i + 1]! - x[i]!, y[i + 1]! - y[i]!) * GRID_HZ,
+    )
 }
 
 /** Effective sample rate of a series, Hz. */

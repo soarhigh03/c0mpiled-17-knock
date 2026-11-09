@@ -39,6 +39,17 @@ export const SonarEvidence = z.object({
   doppler: z.array(z.object({ t: z.number(), energy: z.number().nonnegative() })).max(6_000),
   /** Mouth aperture from face landmarks (e.g. MediaPipe), over face height. */
   mouthAperture: z.array(z.object({ t: z.number(), value: z.number() })).max(3_000),
+  /**
+   * Whole-head pose from the same frames. A single tone and a single mic give
+   * one mixed number per frame, so the echo cannot be separated by position —
+   * but video can, and a moving head is a far larger reflector than lips. The
+   * verifier regresses this out before asking whether the lips explain what is
+   * left.
+   */
+  head: z
+    .array(z.object({ t: z.number(), scale: z.number(), x: z.number(), y: z.number() }))
+    .max(3_000)
+    .default([]),
   sampleRate: z.number().positive(),
   /** Carrier peak over the nearby noise floor, dB. Low ⇒ the probe never arrived. */
   carrierSnrDb: z.number(),

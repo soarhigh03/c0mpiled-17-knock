@@ -9,7 +9,13 @@ import {
   RAW_MIC,
   wait,
 } from './audio.ts'
-import { createMouthTracker, type FaceModelOptions, type MouthSample, type MouthTracker } from './mouth.ts'
+import {
+  createMouthTracker,
+  type FaceModelOptions,
+  type HeadSample,
+  type MouthSample,
+  type MouthTracker,
+} from './mouth.ts'
 import {
   BAND_HIGH_HZ,
   BAND_LOW_HZ,
@@ -83,6 +89,7 @@ export interface CarrierReading {
 export interface SonarSignals {
   doppler: DopplerSample[]
   mouthAperture: MouthSample[]
+  head: HeadSample[]
   carrierSnrDb: number
   sampleRate: number
 }
@@ -98,6 +105,7 @@ export interface SonarSignals {
 export async function probeSonar(options: SonarProbeOptions): Promise<SonarSignals> {
   const doppler: DopplerSample[] = []
   const mouthAperture: MouthSample[] = []
+  const head: HeadSample[] = []
   const snrReadings: number[] = []
 
   // Our own capture: the browser's echo canceller and noise suppressor exist
@@ -210,9 +218,10 @@ export async function probeSonar(options: SonarProbeOptions): Promise<SonarSigna
     }
 
     tracker?.track(t0, (sample) => {
-      if (sample.t < 0) return
-      mouthAperture.push(sample)
-      options.onMouth?.(sample)
+      if (sample.mouth.t < 0) return
+      mouthAperture.push(sample.mouth)
+      head.push(sample.head)
+      options.onMouth?.(sample.mouth)
     })
 
     options.onReady?.()
@@ -248,6 +257,7 @@ export async function probeSonar(options: SonarProbeOptions): Promise<SonarSigna
   return {
     doppler,
     mouthAperture,
+    head,
     // Must stay finite: NaN/Infinity become null in JSON and the evidence
     // schema would reject the submission instead of letting the server call
     // the check inconclusive.

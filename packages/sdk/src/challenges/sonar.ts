@@ -159,15 +159,19 @@ export async function probeSonar(options: SonarProbeOptions): Promise<SonarSigna
     // of the nine I looked at".
     const spectrum = new Float32Array(analyser.frequencyBinCount)
     const binHz = ac.sampleRate / FFT_SIZE
-    const levelAt = (hz: number) => {
+    /** One snapshot, so the carrier and its guard band are read simultaneously. */
+    const snapshot = () => {
       analyser.getFloatFrequencyData(spectrum)
-      return bandPeakDb(spectrum, binHz, hz)
+      return {
+        carrier: bandPeakDb(spectrum, binHz, options.carrierHz),
+        guard: bandPeakDb(spectrum, binHz, options.carrierHz + GUARD_OFFSET_HZ),
+      }
     }
     await wait(BASELINE_FILL_MS, options.signal)
     const ambient: number[] = []
     for (let i = 0; i < BASELINE_READS; i++) {
-      const db = levelAt(options.carrierHz)
-      if (db != null) ambient.push(db)
+      const { carrier } = snapshot()
+      if (carrier != null) ambient.push(carrier)
       await wait(BASELINE_GAP_MS, options.signal)
     }
     const ambientDb = ambient.length > 0 ? median(ambient) : NO_CARRIER_DB
@@ -236,9 +240,8 @@ export async function probeSonar(options: SonarProbeOptions): Promise<SonarSigna
     await wait(LEAD_IN_MS, options.signal)
 
     const readCarrier = () => {
-      const carrier = levelAt(options.carrierHz)
+      const { carrier, guard } = snapshot()
       if (carrier == null) return
-      const guard = levelAt(options.carrierHz + GUARD_OFFSET_HZ)
       const reading: CarrierReading = {
         snrDb: carrier - ambientDb,
         tonalityDb: guard == null ? 0 : carrier - guard,

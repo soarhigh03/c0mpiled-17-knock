@@ -110,7 +110,11 @@ export function openPeerLink(code: string, role: RoomRole): RoomLink {
 
   const dial = () => {
     if (closed || data || !dials) return
-    bindData(peer.connect(otherId, { reliable: true }))
+    // JSON rather than PeerJS's default BinaryPack: room messages are plain
+    // data with optional fields, and JSON's handling of those is the one both
+    // ends already agree on — the same shapes travel over BroadcastChannel's
+    // structured clone in local mode.
+    bindData(peer.connect(otherId, { reliable: true, serialization: 'json' }))
   }
 
   const scheduleDial = () => {

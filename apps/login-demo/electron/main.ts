@@ -1,13 +1,21 @@
 import { execFile } from 'node:child_process'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import { app, BrowserWindow, ipcMain, Menu } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, type IpcMainInvokeEvent } from 'electron'
 import { EnvironmentMonitor } from './environment.ts'
+import { VoiceSidecar, voiceUnavailable, isTrustedVoiceRenderer } from './voice.ts'
 
 const execFileAsync = promisify(execFile)
 
 const DIST = path.join(import.meta.dirname, '../dist')
 const PRELOAD = path.join(import.meta.dirname, 'preload.cjs')
+const voice = new VoiceSidecar({ servicePath: path.resolve(import.meta.dirname, '../../../services/knock-voice'),
+  onAvailabilityChanged: available => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) win.webContents.send('knock-native:voice-availability-changed', available)
+    }
+  },
+})
 
 type Role = 'interviewer' | 'candidate'
 
@@ -109,6 +117,25 @@ ipcMain.handle('knock-native:get-content-protection', (event) => {
   return BrowserWindow.fromWebContents(event.sender)?.isContentProtected() ?? false
 })
 
+function authorizeVoiceSender(event: IpcMainInvokeEvent): void {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  const trusted = isTrustedVoiceRenderer({ knownWindow: !!win && monitors.has(event.sender.id),
+    mainFrame: event.senderFrame === event.sender.mainFrame, candidate: !!win && roleOf(win) === 'candidate',
+    url: event.senderFrame?.url ?? '', devUrl: process.env.VITE_DEV_SERVER_URL, indexPath: path.join(DIST, 'index.html') })
+  if (!trusted) throw new Error('Voice IPC sender is not authorized')
+}
+
+ipcMain.handle('knock-native:get-voice-availability', event => {
+  authorizeVoiceSender(event)
+  return voice.available
+})
+
+ipcMain.handle('knock-native:analyze-voice-window', async (event, pcm: unknown) => {
+  authorizeVoiceSender(event)
+  if (!(pcm instanceof ArrayBuffer)) return { ...voiceUnavailable(), reason: 'invalid voice window' }
+  return voice.analyze(pcm)
+})
+
 function createWindow(role: Role) {
   const others = BrowserWindow.getAllWindows().length
   const win = new BrowserWindow({
@@ -153,11 +180,20 @@ function createWindow(role: Role) {
 const initialRole: Role = process.env.KNOCK_ROLE === 'candidate' ? 'candidate' : 'interviewer'
 
 app.whenReady().then(() => {
+  void voice.start()
   createWindow(initialRole)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow(initialRole)
   })
+})
+
+let voiceShutdown = false
+app.on('before-quit', (event) => {
+  if (voiceShutdown) return
+  event.preventDefault()
+  voiceShutdown = true
+  void voice.stop().finally(() => app.quit())
 })
 
 app.on('window-all-closed', () => {

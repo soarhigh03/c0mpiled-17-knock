@@ -1,4 +1,10 @@
+> Historical Step 0 import attempt. Superseded by README.md and PROVENANCE.md for current implementation and validation.
+
 # Local Step 0 attempt — 2026-11-09
+
+Historical first attempt. The continued implementation and current validation
+status are documented in [the integration report](../../docs/voice-analysis.md)
+and the current service README.
 
 Stopped during Step 0 within the five-minute timebox. Steps 1–3 have not been implemented.
 

@@ -5,6 +5,8 @@ import { sentence } from '../interviewer/present.ts'
 import { ClientStore, emptyState, jwtExpiry } from './store.ts'
 import type { CheckOutcomeResult, DeviceChange, EnvironmentReport, KnockClient, OverallVerdict } from './types.ts'
 import { deriveVerdict } from './verdict.ts'
+import { LocalVoiceCapture } from '../voice/capture.ts'
+import type { VoicePublicResult } from '../voice/types.ts'
 
 /**
  * Which checks can produce a real result end to end today. Anything else is
@@ -13,8 +15,8 @@ import { deriveVerdict } from './verdict.ts'
  * - light: packages/server verifiers/light.ts returns "not implemented yet";
  *   the SDK also draws its own overlay and can't take our challenge screen's
  *   step timestamps.
- * - voice: the SDK sends empty audio and can't take a recording; the server
- *   verifier is not implemented.
+ * - voice: continuous local capture runs independently below. The SDK's server
+ *   contract requires audio upload and cannot accept local label-only results.
  * - sonar runs: a passive ~15 s window that needs the candidate to be talking.
  */
 export const NOT_RUN_REASON: Record<ChallengeKind, string | null> = {
@@ -59,6 +61,17 @@ export class SdkKnockClient extends ClientStore implements KnockClient {
   private video: HTMLVideoElement | null = null
   private watching = false
   private autoChecked = false
+  // This result stays outside KnockState: the existing publisher serializes that
+  // state and the shared voice contract still requires audioBase64. Agree on a
+  // label-only server contract before connecting this boundary.
+  private localVoiceResult: VoicePublicResult = { label: 'unable', at: Date.now() }
+  private readonly voiceListeners = new Set<(result: VoicePublicResult) => void>()
+  private readonly voice = new LocalVoiceCapture({
+    onResult: ({ label, at }) => {
+      this.localVoiceResult = { label, at }
+      for (const listener of this.voiceListeners) listener({ label, at })
+    },
+  })
 
   constructor({ apiUrl, checks, checkOnAttach = false }: SdkKnockClientOptions) {
     super(emptyState(checks, 'Connected to Knock'))
@@ -68,6 +81,10 @@ export class SdkKnockClient extends ClientStore implements KnockClient {
   }
 
   attachMedia(stream: MediaStream | null): void {
+    if (stream !== this.stream) {
+      this.voice.stop()
+      if (stream && this.checks.includes('voice')) void this.voice.start(stream)
+    }
     this.stream = stream
     if (this.video) this.video.srcObject = stream
     if (stream && !this.watching) {
@@ -79,6 +96,16 @@ export class SdkKnockClient extends ClientStore implements KnockClient {
       this.autoChecked = true
       this.after(800, () => this.requestCheck())
     }
+  }
+
+  /** Local label-only boundary; no scores, audio, reasons, or telemetry. */
+  getLocalVoiceResult(): VoicePublicResult {
+    return { ...this.localVoiceResult }
+  }
+
+  subscribeLocalVoice(listener: (result: VoicePublicResult) => void): () => void {
+    this.voiceListeners.add(listener)
+    return () => this.voiceListeners.delete(listener)
   }
 
   requestCheck(): void {

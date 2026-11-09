@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "knock-voice"
 version = "0.1.0"
 requires-python = ">=3.11,<3.14"
-description = "Server-only Pella v2 audio analysis sidecar for Knock"
+description = "Local memory-only Pella v2 audio analysis sidecar for Knock"
 
 [project.scripts]
 knock-voice = "knock_voice.cli:main"

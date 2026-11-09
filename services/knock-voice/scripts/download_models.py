@@ -29,7 +29,7 @@ def main():
     root.mkdir(parents=True, exist_ok=True)
     phases, files = {}, []
     for label, repo, rev, names in [
-        ("pella", PELLA_REPO, PELLA_REV, ["pellav2_infer.py", "pellav2_detector.pt", "config.json", "README.md"]),
+        ("pella", PELLA_REPO, PELLA_REV, ["pellav2_detector.pt", "config.json", "README.md"]),
         ("backbone", BACKBONE_REPO, BACKBONE_REV, ["config.json", "model.safetensors", "README.md"]),
     ]:
         previously_present = {name: (root / label / name).is_file() for name in names}
@@ -46,7 +46,7 @@ def main():
     phases["hash_ms"] = (time.perf_counter() - t) * 1000
     versions = {}
     for name in ["torch", "torchaudio", "transformers", "numpy", "scipy", "soundfile", "pyloudnorm",
-                 "huggingface-hub", "fastapi", "uvicorn", "python-multipart", "psutil"]:
+                 "huggingface-hub", "fastapi", "uvicorn", "psutil"]:
         versions[name] = importlib.metadata.version(name)
     manifest = {
         "created_at": datetime.now(timezone.utc).isoformat(),

@@ -15,5 +15,8 @@ def outcome(score=None, reason=None, *, threshold=0.5):
 
 
 def ui_view(result):
-    """Explicit allowlist: score/report must never be forwarded to the main UI."""
-    return {k: result[k] for k in ("room_code", "session_id", "segment_id", "decision", "label", "reason")}
+    """Legacy helper retained with the current strict public boundary."""
+    label = result.get("label")
+    if label not in ("pass", "review", "unable"):
+        label = "unable"
+    return {"label": label, "at": result["at"]}

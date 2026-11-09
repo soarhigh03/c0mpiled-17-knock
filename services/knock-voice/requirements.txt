@@ -9,6 +9,5 @@ soundfile>=0.12,<1
 pyloudnorm==0.1.1
 fastapi>=0.115,<1
 uvicorn>=0.30,<1
-python-multipart>=0.0.20,<1
 psutil>=6,<8
 httpx>=0.27,<1

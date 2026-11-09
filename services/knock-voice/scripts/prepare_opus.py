@@ -1,40 +1,20 @@
-"""Original -> Opus 16/24 kbps -> 16k mono PCM16 WAV. Not a real-call test."""
-import argparse
-import json
-from pathlib import Path
+"""Codec evaluation using anonymous pipes only: no encoded/decoded files."""
 import subprocess
-from manifest_io import read_samples
+import numpy as np
 
 
-def main():
-    p = argparse.ArgumentParser()
-    p.add_argument("manifest")
-    p.add_argument("--output", default="evaluation/opus")
-    args = p.parse_args()
-    samples = read_samples(args.manifest)
-    dest = Path(args.output).resolve()
-    dest.mkdir(parents=True, exist_ok=True)
-    output = []
-    for i, row in enumerate(samples):
-        row.setdefault("codec", "original")
-        if row["codec"] != "original":
-            raise ValueError("Input manifest must contain only originals")
-        output.append(row)
-        for bitrate in (16, 24):
-            # Numeric filenames prevent sample identifiers from becoming paths.
-            encoded = dest / f"{i:03d}-{bitrate}k.opus"
-            decoded = dest / f"{i:03d}-{bitrate}k.wav"
-            subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", row["path"],
-                            "-ac", "1", "-ar", "48000", "-c:a", "libopus", "-b:a", f"{bitrate}k",
-                            "-application", "voip", str(encoded)], check=True)
-            subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(encoded),
-                            "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", str(decoded)], check=True)
-            output.append(row | {"id": f"{row['id']}-opus{bitrate}k", "source_id": row["id"],
-                                 "codec": f"opus{bitrate}k", "path": str(decoded)})
-    versions = subprocess.check_output(["ffmpeg", "-version"], text=True).splitlines()[0]
-    (dest / "manifest.json").write_text(json.dumps({"ffmpeg": versions, "samples": output}, ensure_ascii=False, indent=2) + "\n")
-    print(dest / "manifest.json")
+def opus_roundtrip(wav, sr, bitrate):
+    if bitrate not in (16, 24):
+        raise ValueError("supported bitrates: 16/24 kbps")
+    wav = np.asarray(wav, dtype="<f4")
+    channels = 1 if wav.ndim == 1 else wav.shape[1]
+    encoded = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-f", "f32le", "-ar", str(sr), "-ac", str(channels),
+        "-i", "pipe:0", "-ac", "1", "-ar", "48000", "-c:a", "libopus", "-b:a", f"{bitrate}k", "-application", "voip",
+        "-f", "opus", "pipe:1"], input=wav.tobytes(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=30).stdout
+    decoded = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-i", "pipe:0", "-ar", "16000", "-ac", "1", "-f", "f32le", "pipe:1"],
+        input=encoded, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=30).stdout
+    return np.frombuffer(decoded, dtype="<f4").copy(), 16000
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit("Use evaluate.py --opus; audio variants remain in memory, no prepared files are created.")

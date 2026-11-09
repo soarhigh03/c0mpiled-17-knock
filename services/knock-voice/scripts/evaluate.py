@@ -1,25 +1,20 @@
-"""Consented labeled evaluation; rows with Unable never count as successful detection."""
+"""Local fixture evaluation. No audio/score report files are created."""
 import argparse
 from collections import defaultdict
-import csv
 import json
-from pathlib import Path
-import platform
-import time
-
+import soundfile as sf
 from manifest_io import read_samples
+from prepare_opus import opus_roundtrip
 from knock_voice.analyzer import Analyzer
 from knock_voice.backend import PellaBackend
-from knock_voice.contracts import outcome
-from knock_voice.metrics import companions, memory_snapshot
+from knock_voice.metrics import companions
 
 
 def summarize(rows):
     groups = defaultdict(lambda: {"human_total": 0, "synthetic_total": 0, "human_scored": 0,
         "synthetic_scored": 0, "false_positive": 0, "false_negative": 0, "unable": 0})
     for row in rows:
-        key = row["capture"] + "/" + row["codec"]
-        g = groups[key]
+        g = groups[row["capture"] + "/" + row["codec"]]
         human = row["kind"] == "human"
         g["human_total" if human else "synthetic_total"] += 1
         if row["decision"] == "Unable":
@@ -37,61 +32,29 @@ def summarize(rows):
 
 
 def main():
-    import soundfile as sf
     p = argparse.ArgumentParser()
     p.add_argument("manifest")
     p.add_argument("--artifacts", default="artifacts")
     p.add_argument("--device", choices=["auto", "mps", "cpu"], default="auto")
-    p.add_argument("--output", default="evaluation/run")
-    p.add_argument("--repeats", type=int, default=3)
-    p.add_argument("--companion-apps-running", action="store_true",
-                   help="Operator confirms Electron app, server and OBS are concurrently running")
+    p.add_argument("--opus", action="store_true")
+    p.add_argument("--companion-apps-running", action="store_true")
     args = p.parse_args()
-    if args.repeats < 1:
-        p.error("repeats must be positive")
     samples = read_samples(args.manifest)
-    dest = Path(args.output)
-    dest.mkdir(parents=True, exist_ok=True)
     analyzer = Analyzer(PellaBackend(args.artifacts, args.device))
-    context = {"operator_confirmed_companion_apps_running": args.companion_apps_running,
-               "observations": companions(), "before_loading": memory_snapshot(),
-               "target_context_declared": args.companion_apps_running and platform.system() == "Darwin"
-                   and 14 * 1024**3 <= memory_snapshot()["system_total_bytes"] <= 18 * 1024**3}
-    t = time.perf_counter()
-    try:
-        analyzer.start()
-    except Exception as exc:
-        (dest / "startup-failure.json").write_text(json.dumps({"error_type": type(exc).__name__,
-            "startup_wall_ms": (time.perf_counter() - t) * 1000, "context": context}, indent=2))
-        raise
-    results, flat = [], []
-    # Alternate repeated samples to separate first inference from steady-state reuse.
-    for repeat in range(args.repeats):
-        for sample in samples:
-            try:
-                wav, sr = sf.read(sample["path"], dtype="float32")
-                result = analyzer.analyze(Path(sample["path"]), wav, sr, "evaluation", "local", sample["id"])
-            except Exception as exc:
-                result = outcome(reason="invalid_audio") | {"report": {"error_type": type(exc).__name__}}
-            results.append({"sample": sample, "repeat": repeat, "result": result})
-            report = result["report"]
-            score = report.get("model_score")
-            flat.append({"id": sample["id"], "speaker_id": sample["speaker_id"], "kind": sample["kind"],
-                "capture": sample["capture"], "codec": sample.get("codec", "original"), "repeat": repeat,
-                "decision": result["decision"], "reason": result["reason"],
-                "model_score": score["value"] if score else None,
-                **{k: report.get(k) for k in ("device", "first_inference", "preprocess_ms", "inference_ms", "total_ms")}})
-    first_repeat = [r for r in flat if r["repeat"] == 0]
-    (dest / "results.json").write_text(json.dumps({"context": context, "startup": analyzer.backend.startup,
-        "summary_first_repeat_only": summarize(first_repeat), "results": results,
-        "limitations": "Codec variants and repeats are correlated. No confidence or population accuracy claim. Opus is not a real call."},
-        ensure_ascii=False, indent=2, allow_nan=False) + "\n")
-    with (dest / "results.csv").open("w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=list(flat[0]))
-        writer.writeheader()
-        writer.writerows(flat)
-    print(json.dumps(summarize(first_repeat), ensure_ascii=False, indent=2))
-    print(dest / "results.json")
+    analyzer.start()
+    report = {"startup": analyzer.backend.startup, "operator_confirmed_companions": args.companion_apps_running,
+              "companions": companions(), "results": []}
+    for sample in samples:
+        wav, sr = sf.read(sample["path"], dtype="float32")  # Existing consented originals only.
+        variants = [("original", wav, sr)]
+        if args.opus:
+            variants.extend((f"opus{bitrate}k", *opus_roundtrip(wav, sr, bitrate)) for bitrate in (16, 24))
+        for codec, audio, rate in variants:
+            result = analyzer.analyze(audio, rate)
+            report["results"].append({"id": sample["id"], "kind": sample["kind"], "codec": codec, **result,
+                                      "private_detail": analyzer.report[-1] if analyzer.report else None})
+    # Explicit operator-only CLI; never called by Electron, telemetry, or main UI.
+    print(json.dumps(report, allow_nan=False))
 
 
 if __name__ == "__main__":

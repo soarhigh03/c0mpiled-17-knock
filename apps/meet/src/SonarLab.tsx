@@ -29,6 +29,9 @@ import {
 const WINDOW_MS = 6_000
 /** Probes run until stopped; this is just a backstop. */
 const MAX_RUN_MS = 5 * 60_000
+/** Audible fallback range, only swept when nothing arrives up high. */
+const AUDIBLE_FROM_HZ = 14_000
+const AUDIBLE_TO_HZ = 17_000
 const GRID_HZ = 20
 const MAX_LAG_MS = 300
 
@@ -43,6 +46,7 @@ export function SonarLab({ stream }: { stream: MediaStream | null }) {
   const [stats, setStats] = useState({ dopplerHz: 0, mouthHz: 0, r: 0, lagMs: 0 })
   const [sweep, setSweep] = useState<SweepPoint[] | null>(null)
   const [sweeping, setSweeping] = useState(false)
+  const [sweepNote, setSweepNote] = useState<string | null>(null)
 
   const doppler = useRef<DopplerSample[]>([])
   const mouth = useRef<MouthSample[]>([])
@@ -118,16 +122,28 @@ export function SonarLab({ stream }: { stream: MediaStream | null }) {
     abortRef.current = controller
     setSweep([])
     setError(null)
+    setSweepNote(null)
     setSweeping(true)
     try {
       const points: SweepPoint[] = []
-      await sweepCarrierResponse({
-        signal: controller.signal,
-        onPoint: (p) => {
-          points.push(p)
-          setSweep([...points])
-        },
-      })
+      const collect = (p: SweepPoint) => {
+        points.push(p)
+        setSweep([...points].sort((a, b) => a.hz - b.hz))
+      }
+      await sweepCarrierResponse({ signal: controller.signal, onPoint: collect })
+
+      // Only drop into the audible band if the inaudible one gave us nothing.
+      // It is the one way to tell "speaker can't reach 18 kHz" apart from
+      // "no sound is coming out at all", and it is worth the earache only then.
+      if (!controller.signal.aborted && !points.some(isSolid)) {
+        setSweepNote('고주파에서 아무것도 도달하지 않아 가청 대역까지 확인합니다 — 소리가 들립니다.')
+        await sweepCarrierResponse({
+          fromHz: AUDIBLE_FROM_HZ,
+          toHz: AUDIBLE_TO_HZ,
+          signal: controller.signal,
+          onPoint: collect,
+        })
+      }
       // Land on the best frequency that actually cleared the room, if any.
       // Picking the plain maximum would happily hand back a noise spike.
       const best = points
@@ -206,7 +222,7 @@ export function SonarLab({ stream }: { stream: MediaStream | null }) {
         <Readout label="상관 (디버그)" value={`r=${stats.r.toFixed(2)} @ ${stats.lagMs}ms`} />
       </dl>
 
-      {sweep && <SweepTable points={sweep} running={sweeping} />}
+      {sweep && <SweepTable points={sweep} running={sweeping} note={sweepNote} />}
 
       {error && <p style={{ color: 'crimson' }}>{error}</p>}
     </details>
@@ -218,22 +234,40 @@ export function SonarLab({ stream }: { stream: MediaStream | null }) {
  * the bars stop clearing ~6 dB is this machine's ceiling, and a carrier above
  * it cannot work no matter what the rest of the pipeline does.
  */
-function SweepTable({ points, running }: { points: SweepPoint[]; running: boolean }) {
-  const solid = points.filter((p) => isSolid(p))
-  const noisy = points.filter((p) => p.noiseDb > 6).length
+function SweepTable({
+  points,
+  running,
+  note,
+}: {
+  points: SweepPoint[]
+  running: boolean
+  note: string | null
+}) {
+  const solid = points.filter(isSolid)
+  const best = solid.reduce<SweepPoint | null>(
+    (a, b) => (a == null || b.arrivalDb > a.arrivalDb ? b : a),
+    null,
+  )
+  // Noise only matters relative to what it is drowning out: a ±10 dB room is
+  // irrelevant next to a 30 dB arrival, and fatal next to a 4 dB one.
+  const drowned = points.filter((p) => !isSolid(p) && p.arrivalDb <= p.noiseDb).length
   return (
     <div style={{ marginTop: 12 }}>
       <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>
         스피커→마이크 도달 / 룸 노이즈 (dB){running && ' — 측정 중, 조용히 해주세요…'}
       </div>
-      {!running && noisy > points.length / 3 && (
-        <p style={{ fontSize: 12, color: '#fbbf24', margin: '4px 0' }}>
-          룸 노이즈가 커서 결과를 믿을 수 없습니다. 조용한 곳에서 다시 재주세요.
+      {note && <p style={{ fontSize: 12, color: '#fbbf24', margin: '4px 0' }}>{note}</p>}
+      {!running && best && (
+        <p style={{ fontSize: 12, color: '#34d399', margin: '4px 0' }}>
+          사용 가능 {solid.length}/{points.length}개 · 최적 {(best.hz / 1000).toFixed(1)} kHz (
+          {best.arrivalDb.toFixed(1)} dB) — 캐리어에 적용했습니다.
         </p>
       )}
-      {!running && noisy <= points.length / 3 && solid.length === 0 && (
+      {!running && !best && (
         <p style={{ fontSize: 12, color: '#fbbf24', margin: '4px 0' }}>
-          조용한데도 전 대역이 도달하지 않습니다. 출력 장치·음량·음소거를 확인하세요.
+          {drowned > points.length / 2
+            ? '룸 노이즈에 묻혀 판단할 수 없습니다. 조용한 곳에서 다시 재주세요.'
+            : '전 대역이 도달하지 않습니다. 출력 장치·음량·음소거를 확인하세요.'}
         </p>
       )}
       {points.map((p) => (

@@ -36,7 +36,7 @@ preSense는 **클라이언트 SDK + 검증 API**입니다. SDK가 사용자 기�
 | `cover` | **가리기 과제** — 손으로 얼굴을 가렸다 내리는 동안 얼굴·손·경계의 일관성이 유지되는지. 페이스스왑은 이 전이 구간에서 무너집니다 | 🚧 |
 | `voice` | 합성 음성(TTS/VC) | 🚧 |
 
-✅ 구현 완료 · 🚧 데모 시나리오에 포함, 코드 미구현 ([상태와 남은 일](#상태와-남은-일))
+✅ 구현 완료 · 🚧 데모 시나리오에 포함, 코드 미구현
 
 ### 보안 원칙
 
@@ -208,6 +208,20 @@ npm run dev:desktop    # server(:8787) + login-demo (Electron) — 제출 데모
 npm run typecheck
 npm test
 ```
+
+**두 사람이 각자 노트북에서 통화하려면** — 기본 전송은 `BroadcastChannel`이라 한 머신의 두 창끼리만
+통하고 영상은 옮기지 않습니다. 양쪽 `.env`에 아래를 넣으면 PeerJS 브로커로 WebRTC가 붙어
+서로의 카메라가 뜹니다. 미디어는 P2P로 흐르고 브로커는 연결 수립에만 관여합니다.
+
+```bash
+VITE_ROOM_TRANSPORT=peer
+KNOCK_TOKEN_SECRET=<양쪽 동일>   # 토큰 introspect가 머신 너머로 성립하려면
+```
+
+한쪽은 `npm run dev:desktop`(면접관), 다른 쪽은 같은 명령에 `KNOCK_ROLE=candidate`로 띄우고
+같은 룸 코드로 들어갑니다. 공개 브로커라 룸 id가 전역에서 겹칠 수 있고(그때는
+`VITE_ROOM_NAMESPACE`를 바꾸세요) TURN이 없어 빡빡한 NAT에서는 미디어가 안 붙을 수 있습니다 —
+데모용 구성입니다.
 
 > Chrome 권장. Safari는 `requestVideoFrameCallback`이 없어 sonar가 `inconclusive`가 됩니다.
 > sonar는 **스피커로 소리가 나야** 합니다 — 이어폰을 꽂으면 스피커→방→마이크 경로가 사라집니다.

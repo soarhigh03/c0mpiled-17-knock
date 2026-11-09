@@ -8,17 +8,20 @@ import { TitleBar } from '../interviewer/TitleBar.tsx'
 import { VideoView } from '../interviewer/VideoView.tsx'
 import type { KnockClient } from '../knock/types.ts'
 import { useKnockState } from '../knock/useKnock.ts'
+import type { RoomLink } from '../room/link.ts'
+import { useRoomMedia } from '../room/useRoomMedia.ts'
 import { ChallengeOverlay } from './ChallengeOverlay.tsx'
 import type { JoinSelection } from './PreJoin.tsx'
 
 interface CandidateCallProps extends JoinSelection {
   room: Room
   client: KnockClient
+  link: RoomLink
   onLeave: () => void
 }
 
 /** The candidate's side of the call. Knock challenges appear over it when the client issues one. */
-export function CandidateCall({ room, client, cameraId, micId, onLeave }: CandidateCallProps) {
+export function CandidateCall({ room, client, link, cameraId, micId, onLeave }: CandidateCallProps) {
   const state = useKnockState(client)
   const env = useNativeEnvironment()
   const [stream, setStream] = useState<MediaStream | null>(null)
@@ -62,6 +65,9 @@ export function CandidateCall({ room, client, cameraId, micId, onLeave }: Candid
     return () => client.attachPanelHost(null)
   }, [client])
 
+  // Send this camera to the interviewer, and show theirs.
+  const { remote, status } = useRoomMedia(link, stream)
+
   // Mid-call device changes go to the client, which marks the result invalid.
   useEnvironmentReporting(client, stream, env)
 
@@ -69,13 +75,16 @@ export function CandidateCall({ room, client, cameraId, micId, onLeave }: Candid
     <div className="app app--ended">
       <TitleBar title={`preSense · ${room.title}`} />
       <div className="candidate-call" ref={callRef}>
-        {/* TODO(webrtc): the interviewer's remote video. */}
         <div className="tile candidate-call__remote">
-          <div className="tile__avatar-wrap">
-            <div className="avatar" style={{ background: 'var(--avatar-1)' }}>
-              {initials(room.host.name)}
+          {remote ? (
+            <VideoView stream={remote} />
+          ) : (
+            <div className="tile__avatar-wrap">
+              <div className="avatar" style={{ background: 'var(--avatar-1)' }}>
+                {initials(room.host.name)}
+              </div>
             </div>
-          </div>
+          )}
           <div className="tile__name">{room.host.name}</div>
           <div className="self-pip">
             {stream ? (
@@ -92,7 +101,11 @@ export function CandidateCall({ room, client, cameraId, micId, onLeave }: Candid
           <span className="muted" aria-live="polite">
             {state.verdict.status === 'checking'
               ? 'preSense check running — keep talking naturally'
-              : 'Interview in progress'}
+              : status.state === 'error'
+                ? status.message
+                : link.carriesMedia && status.state !== 'connected'
+                  ? `Connecting to ${room.host.name}…`
+                  : 'Interview in progress'}
           </span>
           <button type="button" className="end-button" onClick={onLeave}>
             <PhoneOff size={15} aria-hidden /> Leave

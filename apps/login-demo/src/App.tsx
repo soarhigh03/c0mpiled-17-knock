@@ -9,6 +9,7 @@ import { RoomGuestClient } from './knock/roomGuestClient.ts'
 import { SdkKnockClient } from './knock/sdkClient.ts'
 import { SelfClient } from './knock/selfClient.ts'
 import { KnockContext, type KnockClients } from './knock/useKnock.ts'
+import { openRoomLink, type RoomLink } from './room/link.ts'
 import { connectRoomPublisher } from './room/publisher.ts'
 import type { Room } from './rooms.ts'
 
@@ -25,37 +26,54 @@ interface InterviewerSession {
   room: Room
   participants: Participant[]
   clients: KnockClients
+  link: RoomLink
   mocks: Record<string, MockKnockClient> | null
   dispose: () => void
 }
 
 function startRoom(room: Room): InterviewerSession {
   const participants = roomParticipants(room)
+  // One link per room, owned here: it carries both the check traffic and the
+  // call's video, and the two must not be able to outlive each other.
+  const link = openRoomLink(room.code, 'interviewer')
   if (mockModule) {
     const mocks = { [HOST_ID]: new mockModule.MockKnockClient(), [GUEST_ID]: new mockModule.MockKnockClient() }
-    return { room, participants, clients: mocks, mocks, dispose: () => {} }
+    return { room, participants, clients: mocks, link, mocks, dispose: () => link.close() }
   }
-  const guest = new RoomGuestClient({ room, participantId: GUEST_ID, apiUrl: API_URL, requestedBy: room.host.name })
+  const guest = new RoomGuestClient({ room, participantId: GUEST_ID, apiUrl: API_URL, requestedBy: room.host.name, link })
   return {
     room,
     participants,
     clients: { [HOST_ID]: new SelfClient(room.checks), [GUEST_ID]: guest },
+    link,
     mocks: null,
-    dispose: () => guest.dispose(),
+    dispose: () => {
+      guest.dispose()
+      link.close()
+    },
   }
 }
 
 let candidateMock: MockKnockClient | null = null
 
 function connectCandidate(room: Room): CandidateSession {
+  const link = openRoomLink(room.code, 'candidate')
   if (mockModule) {
     candidateMock = new mockModule.MockKnockClient()
     // Stands in for the interviewer asking for a check, to exercise the challenge screen.
     candidateMock.scheduleChallenge(4000, room.host.name)
-    return { client: candidateMock, disconnect: () => {} }
+    return { client: candidateMock, link, disconnect: () => link.close() }
   }
   const client = new SdkKnockClient({ apiUrl: API_URL, checks: room.checks, checkOnAttach: true })
-  return { client, disconnect: connectRoomPublisher(room, GUEST_ID, client) }
+  const stop = connectRoomPublisher(link, GUEST_ID, client)
+  return {
+    client,
+    link,
+    disconnect: () => {
+      stop()
+      link.close()
+    },
+  }
 }
 
 interface DevSwitcherProps {
@@ -109,6 +127,7 @@ export function App() {
       <InterviewerView
         room={session.room}
         participants={session.participants}
+        link={session.link}
         onLeave={() => {
           session.dispose()
           setSession(null)

@@ -128,11 +128,11 @@ export function SonarLab({ stream }: { stream: MediaStream | null }) {
           setSweep([...points])
         },
       })
-      // Land on whatever this machine actually transmits best.
-      const best = points.reduce<SweepPoint | null>(
-        (a, b) => (a == null || b.arrivalDb > a.arrivalDb ? b : a),
-        null,
-      )
+      // Land on the best frequency that actually cleared the room, if any.
+      // Picking the plain maximum would happily hand back a noise spike.
+      const best = points
+        .filter(isSolid)
+        .reduce<SweepPoint | null>((a, b) => (a == null || b.arrivalDb > a.arrivalDb ? b : a), null)
       if (best) setCarrierHz(Math.round(best.hz))
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -219,18 +219,23 @@ export function SonarLab({ stream }: { stream: MediaStream | null }) {
  * it cannot work no matter what the rest of the pipeline does.
  */
 function SweepTable({ points, running }: { points: SweepPoint[]; running: boolean }) {
-  const best = points.reduce((a, p) => Math.max(a, p.arrivalDb), 0)
+  const solid = points.filter((p) => isSolid(p))
+  const noisy = points.filter((p) => p.noiseDb > 6).length
   return (
     <div style={{ marginTop: 12 }}>
       <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>
-        스피커→마이크 도달 (dB){running && ' — 측정 중…'}
-        {!running && best < 6 && (
-          <span style={{ color: '#fbbf24' }}>
-            {' '}
-            · 전 대역이 0dB 근처입니다. 출력 장치·음량·음소거를 먼저 확인하세요.
-          </span>
-        )}
+        스피커→마이크 도달 / 룸 노이즈 (dB){running && ' — 측정 중, 조용히 해주세요…'}
       </div>
+      {!running && noisy > points.length / 3 && (
+        <p style={{ fontSize: 12, color: '#fbbf24', margin: '4px 0' }}>
+          룸 노이즈가 커서 결과를 믿을 수 없습니다. 조용한 곳에서 다시 재주세요.
+        </p>
+      )}
+      {!running && noisy <= points.length / 3 && solid.length === 0 && (
+        <p style={{ fontSize: 12, color: '#fbbf24', margin: '4px 0' }}>
+          조용한데도 전 대역이 도달하지 않습니다. 출력 장치·음량·음소거를 확인하세요.
+        </p>
+      )}
       {points.map((p) => (
         <div key={p.hz} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
           <span style={{ width: 64, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
@@ -242,16 +247,24 @@ function SweepTable({ points, running }: { points: SweepPoint[]; running: boolea
               borderRadius: 2,
               // Clamped so one strong bar doesn't flatten the rest.
               width: `${Math.min(100, Math.max(0, p.arrivalDb) * 2)}%`,
-              background: p.arrivalDb >= 6 ? '#34d399' : '#475569',
+              background: isSolid(p) ? '#34d399' : '#475569',
             }}
           />
           <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.8 }}>
             {p.arrivalDb.toFixed(1)}
           </span>
+          <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.45 }}>
+            ±{Number.isFinite(p.noiseDb) ? p.noiseDb.toFixed(1) : '—'}
+          </span>
         </div>
       ))}
     </div>
   )
+}
+
+/** Usable: the tone cleared both the threshold and the room's own wobble. */
+function isSolid(p: SweepPoint): boolean {
+  return p.arrivalDb >= 6 && p.arrivalDb > p.noiseDb
 }
 
 function Readout({ label, value, color }: { label: string; value: string; color?: string }) {

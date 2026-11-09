@@ -1,12 +1,4 @@
-import {
-  bandPeakDb,
-  FFT_SIZE,
-  FILL_MS,
-  median,
-  NO_CARRIER_DB,
-  RAW_MIC,
-  wait,
-} from './audio.ts'
+import { bandPeakDb, FILL_MS, median, RAW_MIC, wait } from './audio.ts'
 
 /**
  * Measures which carrier frequencies actually make the round trip out of this
@@ -27,16 +19,33 @@ const DEFAULT_TO_HZ = 22_000
 const DEFAULT_STEP_HZ = 500
 /** Matches the probe, so sweep results transfer directly to a real run. */
 const DEFAULT_GAIN = 0.2
-/** Readings per phase; the median rejects a passing bang or cough. */
-const READS = 3
-const READ_GAP_MS = 50
-/** Tone rise time before measuring. */
-const SETTLE_MS = 120
+/**
+ * Coarser than the probe's analyser: we only need to see whether a tone is
+ * present, and a shorter window means a shorter settle, which keeps the whole
+ * sweep inside the time a room stays quiet.
+ */
+const SWEEP_FFT_SIZE = 4096
+/**
+ * On/off pairs per frequency. One pair is hostage to whatever happened in the
+ * room between its two reads — a chair, a voice, a door. Interleaving several
+ * and differencing the medians rejects drift that a single before/after
+ * cannot, which is the whole reason this is not one measurement.
+ */
+const CYCLES = 3
+/** Must exceed the analyser window so a read sees only the new state. */
+const SETTLE_MS = 140
+/** Short ramp: gating a tone hard clicks, and a click is broadband. */
+const RAMP_MS = 20
 
 export interface SweepPoint {
   hz: number
   /** dB the carrier bin rose when the tone was switched on at this frequency. */
   arrivalDb: number
+  /**
+   * Spread of the silent readings at this frequency — how much the room moved
+   * on its own. An arrival that does not clear it is not a measurement.
+   */
+  noiseDb: number
 }
 
 export interface SweepOptions {
@@ -63,7 +72,7 @@ export async function sweepCarrierResponse(options: SweepOptions = {}): Promise<
   try {
     if (ac.state === 'suspended') await ac.resume()
 
-    const analyser = new AnalyserNode(ac, { fftSize: FFT_SIZE, smoothingTimeConstant: 0 })
+    const analyser = new AnalyserNode(ac, { fftSize: SWEEP_FFT_SIZE, smoothingTimeConstant: 0 })
     ac.createMediaStreamSource(mic).connect(analyser)
 
     const gain = new GainNode(ac, { gain: 0 })
@@ -72,38 +81,48 @@ export async function sweepCarrierResponse(options: SweepOptions = {}): Promise<
     oscillator.start()
 
     const spectrum = new Float32Array(analyser.frequencyBinCount)
-    const binHz = ac.sampleRate / FFT_SIZE
-    const read = async (hz: number) => {
-      const levels: number[] = []
-      for (let i = 0; i < READS; i++) {
-        analyser.getFloatFrequencyData(spectrum)
-        const db = bandPeakDb(spectrum, binHz, hz)
-        if (db != null) levels.push(db)
-        await wait(READ_GAP_MS, options.signal)
-      }
-      return levels.length > 0 ? median(levels) : NO_CARRIER_DB
+    const binHz = ac.sampleRate / SWEEP_FFT_SIZE
+    const level = options.gain ?? DEFAULT_GAIN
+
+    /** Ramp to `to`, let the analyser window refill, then read the bin. */
+    const settleAndRead = async (hz: number, to: number) => {
+      gain.gain.linearRampToValueAtTime(to, ac.currentTime + RAMP_MS / 1000)
+      await wait(SETTLE_MS, options.signal)
+      analyser.getFloatFrequencyData(spectrum)
+      return bandPeakDb(spectrum, binHz, hz)
     }
+
+    // Let the first analyser window fill before the first frequency.
+    await wait(FILL_MS, options.signal)
 
     for (let hz = fromHz; hz <= toHz; hz += stepHz) {
       if (options.signal?.aborted) break
       // Nyquist: a tone we cannot even represent is not a hardware finding.
       if (hz >= ac.sampleRate / 2) break
-
-      gain.gain.setValueAtTime(0, ac.currentTime)
       oscillator.frequency.setValueAtTime(hz, ac.currentTime)
-      await wait(FILL_MS, options.signal)
-      const silent = await read(hz)
 
-      gain.gain.setValueAtTime(options.gain ?? DEFAULT_GAIN, ac.currentTime)
-      await wait(FILL_MS + SETTLE_MS, options.signal)
-      const sounding = await read(hz)
+      const off: number[] = []
+      const on: number[] = []
+      for (let cycle = 0; cycle < CYCLES; cycle++) {
+        const silent = await settleAndRead(hz, 0)
+        if (silent != null) off.push(silent)
+        const sounding = await settleAndRead(hz, level)
+        if (sounding != null) on.push(sounding)
+      }
 
-      const point = { hz, arrivalDb: sounding - silent }
+      // Infinite noise marks a frequency we failed to measure at all, so it
+      // can never read as a clean result downstream.
+      const measured = on.length > 0 && off.length > 1
+      const point: SweepPoint = {
+        hz,
+        arrivalDb: measured ? median(on) - median(off) : 0,
+        noiseDb: measured ? Math.max(...off) - Math.min(...off) : Infinity,
+      }
       points.push(point)
       options.onPoint?.(point)
     }
 
-    gain.gain.setValueAtTime(0, ac.currentTime)
+    gain.gain.linearRampToValueAtTime(0, ac.currentTime + RAMP_MS / 1000)
   } finally {
     oscillator?.stop()
     for (const track of mic.getTracks()) track.stop()
